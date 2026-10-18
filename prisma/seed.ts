@@ -6,6 +6,7 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, type BookingStatus, type Prisma } from "@prisma/client";
+import { pgPoolConfig } from "../src/lib/db/pool";
 import { buildSeedPlan } from "./seed-data";
 
 if (process.env.NODE_ENV === "production" && process.env.SEED_ALLOW_PRODUCTION !== "1") {
@@ -19,7 +20,7 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
+const db = new PrismaClient({ adapter: new PrismaPg(pgPoolConfig(process.env.DATABASE_URL)) });
 
 /** Statuses that hold a slot. Must match the predicate of the overlap constraints in the migrations. */
 const ACTIVE_STATUSES: BookingStatus[] = ["PENDING", "CONFIRMED", "IN_PROGRESS"];
@@ -156,7 +157,8 @@ async function main() {
         });
         displaced += res.count;
       }
-      if (displaced > 0) console.warn(`Cancelled ${displaced} app-made booking(s) that clashed with seed data.`);
+      if (displaced > 0)
+        console.warn(`Cancelled ${displaced} app-made booking(s) that clashed with seed data.`);
 
       for (const b of plan.bookings) {
         const data = {
@@ -239,7 +241,8 @@ async function main() {
         await tx.notification.upsert({ where: { id: n.id }, create: { id: n.id, ...data }, update: data });
       }
     },
-    { timeout: 60_000 },
+    // maxWait covers opening a cold pooled connection to a distant Neon region (the default is 2 s).
+    { maxWait: 30_000, timeout: 120_000 },
   );
 
   const counts = {

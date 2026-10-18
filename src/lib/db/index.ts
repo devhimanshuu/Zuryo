@@ -2,6 +2,7 @@ import "server-only";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 import { getServerEnv } from "@/lib/config/env.server";
+import { pgPoolConfig } from "./pool";
 
 /**
  * One PrismaClient per server process. In development, Next.js hot reload re-evaluates modules,
@@ -9,9 +10,12 @@ import { getServerEnv } from "@/lib/config/env.server";
  */
 function createClient() {
   const { DATABASE_URL, NODE_ENV } = getServerEnv();
-  const adapter = new PrismaPg({ connectionString: DATABASE_URL });
+  const adapter = new PrismaPg(pgPoolConfig(DATABASE_URL));
   return new PrismaClient({ adapter, log: NODE_ENV === "development" ? ["warn", "error"] : ["error"] });
 }
+
+/** The client type services accept, so tests can inject a client bound to a test database. */
+export type Db = PrismaClient;
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 

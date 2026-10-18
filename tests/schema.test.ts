@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { ACTIVE_BOOKING_STATUSES } from "@/lib/booking/rules";
 import * as E from "@/lib/validation/enums";
 
 const schema = readFileSync(join(__dirname, "../prisma/schema.prisma"), "utf8");
@@ -34,6 +35,8 @@ describe("prisma schema", () => {
     expect(prismaEnum("FitnessGoal")).toEqual([...E.FITNESS_GOALS]);
     expect(prismaEnum("WorkoutPreference")).toEqual([...E.WORKOUT_PREFERENCES]);
     expect(prismaEnum("PricingKind")).toEqual([...E.PRICING_KINDS]);
+    expect(prismaEnum("WorkoutCategory")).toEqual([...E.WORKOUT_CATEGORIES]);
+    expect(prismaEnum("AvailabilityStatus")).toEqual([...E.AVAILABILITY_STATUSES]);
   });
 
   it("defines every core domain model", () => {
@@ -80,5 +83,24 @@ describe("prisma schema", () => {
     expect(migrationSql).toContain('"Package_sessions_check"');
     expect(migrationSql).toContain('"PricingRule_one_active_per_kind"');
     expect(migrationSql).toContain('"Booking_range_check"');
+  });
+
+  it("prevents overlapping active bookings in the database, not just in application code", () => {
+    expect(migrationSql).toMatch(/CREATE EXTENSION IF NOT EXISTS btree_gist/);
+    for (const [name, column] of [
+      ["Booking_trainer_no_overlap", "trainerId"],
+      ["Booking_customer_no_overlap", "customerId"],
+    ]) {
+      const start = migrationSql.indexOf(`"${name}"`);
+      expect(start, name).toBeGreaterThan(-1);
+      const statement = migrationSql.slice(start, migrationSql.indexOf(";", start));
+      expect(statement).toContain(
+        `EXCLUDE USING gist ("${column}" WITH =, tstzrange("startAt", "endAt", '[)') WITH &&)`,
+      );
+      // The constraint's notion of "active" must match the application's.
+      const predicate = statement.slice(statement.indexOf("WHERE"));
+      for (const status of ACTIVE_BOOKING_STATUSES) expect(predicate).toContain(`'${status}'`);
+      expect(predicate).not.toContain("'CANCELLED'");
+    }
   });
 });

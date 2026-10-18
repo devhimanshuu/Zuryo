@@ -167,7 +167,7 @@ export const TRAINERS = [
     experienceYears: 7,
     bio: "Breath-led yoga and mobility work for stiff backs and busy schedules.",
   },
-] as const satisfies ReadonlyArray<{ categories: readonly Category[] }>;
+] as const;
 
 export const OPERATIONS_USER = {
   id: "seed_user_neha",

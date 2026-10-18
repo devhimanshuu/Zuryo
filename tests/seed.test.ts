@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { WORKOUT_CATEGORIES } from "@/lib/validation/enums";
 import { buildSeedPlan } from "../prisma/seed-data";
 
 const ANCHOR = new Date("2026-10-19T04:30:00Z");
@@ -50,6 +51,39 @@ describe("seed plan", () => {
       const net = plan.ledger.filter((e) => e.packageId === p.id).reduce((s, e) => s + e.delta, 0);
       expect(p.usedSessions).toBe(-net);
       expect(p.usedSessions).toBeLessThanOrEqual(p.totalSessions);
+    }
+  });
+
+  it("never double-books a customer either", () => {
+    const active = plan.bookings.filter((b) => !["CANCELLED", "COMPLETED", "FAILED"].includes(b.status));
+    for (const a of active) {
+      for (const b of active) {
+        if (a.id >= b.id || a.customerId !== b.customerId) continue;
+        expect(a.startAt < b.endAt && b.startAt < a.endAt, `${a.reference} overlaps ${b.reference}`).toBe(
+          false,
+        );
+      }
+    }
+  });
+
+  it("gives every trainer workout categories and only assigns trainers to workouts they coach", () => {
+    for (const t of plan.trainers) expect(t.categories.length).toBeGreaterThan(0);
+    for (const b of plan.bookings.filter((b) => b.trainerId)) {
+      const trainer = plan.trainers.find((t) => t.id === b.trainerId)!;
+      expect((trainer.categories as readonly string[]).includes(b.category), b.reference).toBe(true);
+    }
+  });
+
+  it("offers every workout category in the main demo community", () => {
+    const palmGrove = plan.trainers.filter((t) => t.zoneId === "seed_zone_palm_grove");
+    const offered = new Set(palmGrove.flatMap((t) => [...t.categories]));
+    expect([...offered].sort()).toEqual([...WORKOUT_CATEGORIES].sort());
+  });
+
+  it("opens availability for every trainer on each of the next seven days", () => {
+    for (const t of plan.trainers) {
+      const windows = plan.availability.filter((a) => a.trainerId === t.id && a.status === "AVAILABLE");
+      expect(windows.length).toBe(14);
     }
   });
 
