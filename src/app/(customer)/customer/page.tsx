@@ -1,19 +1,21 @@
-import { ArrowRight, Bell, ClipboardCheck, NotebookPen } from "lucide-react";
+import { ArrowRight, Bell, CalendarClock, ClipboardCheck, NotebookPen, Zap } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ErrorState, EmptyState, PhaseNote } from "@/components/shared/states";
+import { ErrorState, EmptyState } from "@/components/shared/states";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookingItem } from "@/features/bookings/booking-item";
 import { PackageMeter } from "@/features/customers/package-meter";
 import { safely } from "@/lib/utils/errors";
 import { formatDay, greeting, titleCase } from "@/lib/utils/format";
-import { DEMO_PERSONAS } from "@/server/demo";
+import { getActor } from "@/server/auth/actor";
 import { getCustomerHome } from "@/server/queries/customer";
 
 export const metadata: Metadata = { title: "Home" };
 
 export default async function CustomerHomePage() {
-  const result = await safely(() => getCustomerHome(DEMO_PERSONAS.CUSTOMER.userId));
+  const actor = await getActor("CUSTOMER");
+  const result = await safely(() => getCustomerHome(actor.userId));
   if (!result.ok) return <ErrorState message={result.error.message} />;
   const { profile, upcoming, recent, pkg, unread } = result.data;
   if (!profile)
@@ -49,6 +51,7 @@ export default async function CustomerHomePage() {
               counterpartLabel: "Trainer",
               counterpartName: next.trainer?.user.name ?? null,
               location: next.serviceZone.name,
+              href: `/customer/bookings/${next.id}`,
             }}
           />
         ) : (
@@ -57,9 +60,18 @@ export default async function CustomerHomePage() {
             body="When you book a trainer, your next session shows up here."
           />
         )}
-        <PhaseNote phase={2}>
-          Booking a new session (instant or scheduled) and checkout are built next.
-        </PhaseNote>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="instant">
+            <Link href="/customer/bookings/new?mode=instant">
+              <Zap aria-hidden /> Train within the hour
+            </Link>
+          </Button>
+          <Button asChild variant="secondary">
+            <Link href="/customer/bookings/new?mode=scheduled">
+              <CalendarClock aria-hidden /> Schedule a session
+            </Link>
+          </Button>
+        </div>
       </section>
 
       <div className="grid gap-5 lg:grid-cols-3">

@@ -5,7 +5,7 @@ import { ErrorState, EmptyState, PhaseNote } from "@/components/shared/states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { safely } from "@/lib/utils/errors";
 import { formatSlot, titleCase } from "@/lib/utils/format";
-import { DEMO_PERSONAS } from "@/server/demo";
+import { getActor } from "@/server/auth/actor";
 import { getCustomerFitness } from "@/server/queries/customer";
 
 export const metadata: Metadata = { title: "Fitness" };
@@ -20,7 +20,8 @@ function describe(a: Activity) {
 }
 
 export default async function FitnessPage() {
-  const result = await safely(() => getCustomerFitness(DEMO_PERSONAS.CUSTOMER.userId));
+  const actor = await getActor("CUSTOMER");
+  const result = await safely(() => getCustomerFitness(actor.userId));
   if (!result.ok) return <ErrorState message={result.error.message} />;
   const { profile, sessions } = result.data;
 

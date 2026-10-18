@@ -5,10 +5,11 @@ import { ErrorState, EmptyState, PhaseNote } from "@/components/shared/states";
 import { Metric } from "@/components/shared/metric";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScheduleRow } from "@/features/bookings/schedule-row";
+import { categoryLabel } from "@/lib/booking/categories";
 import { safely } from "@/lib/utils/errors";
 import { formatDay, formatSlot, formatTime } from "@/lib/utils/format";
 import { addDays, istMidnight } from "@/lib/utils/time";
-import { DEMO_PERSONAS } from "@/server/demo";
+import { getActor } from "@/server/auth/actor";
 import { getTrainerOverview } from "@/server/queries/trainer";
 
 export const metadata: Metadata = { title: "Trainer overview" };
@@ -16,9 +17,8 @@ export const metadata: Metadata = { title: "Trainer overview" };
 export default async function TrainerOverviewPage() {
   const now = new Date();
   const dayStart = istMidnight(now);
-  const result = await safely(() =>
-    getTrainerOverview(DEMO_PERSONAS.TRAINER.userId, dayStart, addDays(dayStart, 1)),
-  );
+  const actor = await getActor("TRAINER");
+  const result = await safely(() => getTrainerOverview(actor.userId, dayStart, addDays(dayStart, 1)));
   if (!result.ok) return <ErrorState message={result.error.message} />;
   const { profile, today, upcoming, notifications } = result.data;
   const next = [...today, ...upcoming].find((b) => b.endAt > now && b.status !== "COMPLETED");
@@ -27,7 +27,7 @@ export default async function TrainerOverviewPage() {
     <div className="grid gap-8">
       <PageHeader
         eyebrow={formatDay(now)}
-        title={`Today, ${DEMO_PERSONAS.TRAINER.name.split(" ")[0]}`}
+        title={`Today, ${actor.name.split(" ")[0]}`}
         description={
           profile ? `${profile.serviceZone.name} · ${profile.specializations.join(", ")}` : undefined
         }
@@ -58,7 +58,7 @@ export default async function TrainerOverviewPage() {
                     key={b.id}
                     startAt={b.startAt}
                     status={b.status}
-                    title={b.customer.user.name}
+                    title={`${b.customer.user.name} · ${categoryLabel(b.workoutCategory)}`}
                     subtitle={`${b.serviceZone.name}${b.customer.addressLine ? `, ${b.customer.addressLine.split(",")[0]}` : ""}`}
                   />
                 ))}
@@ -120,7 +120,7 @@ export default async function TrainerOverviewPage() {
                   showDay
                   startAt={b.startAt}
                   status={b.status}
-                  title={b.customer.user.name}
+                  title={`${b.customer.user.name} · ${categoryLabel(b.workoutCategory)}`}
                   subtitle={b.serviceZone.name}
                 />
               ))}
@@ -129,7 +129,9 @@ export default async function TrainerOverviewPage() {
         </Card>
       ) : null}
 
-      <PhaseNote>Starting a session and the server-timed live session screen.</PhaseNote>
+      <PhaseNote>
+        Starting a session, the live session timer and session notes arrive in a later phase.
+      </PhaseNote>
     </div>
   );
 }

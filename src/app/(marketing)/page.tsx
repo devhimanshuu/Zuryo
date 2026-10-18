@@ -47,7 +47,7 @@ function Hero() {
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Button asChild variant="primary" size="lg">
-            <Link href="/customer">
+            <Link href="/customer/bookings/new">
               Book a trainer <ArrowRight aria-hidden />
             </Link>
           </Button>
@@ -348,7 +348,7 @@ function FinalCta() {
         </div>
         <div className="flex flex-wrap gap-3 lg:justify-end">
           <Button asChild variant="inverse" size="lg">
-            <Link href="/customer">
+            <Link href="/customer/bookings/new">
               Book a trainer <ArrowRight aria-hidden />
             </Link>
           </Button>
