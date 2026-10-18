@@ -1,7 +1,25 @@
 import "server-only";
+import { WORKOUT_CATEGORIES, WORKOUT_CATEGORY_INFO } from "@/lib/booking/categories";
+import { ACTIVE_BOOKING_STATUSES as ACTIVE_STATUSES } from "@/lib/booking/rules";
 import { getDb } from "@/lib/db";
+import { loadCustomerContext } from "@/server/booking/availability-service";
 
-const ACTIVE_STATUSES = ["PENDING", "CONFIRMED", "IN_PROGRESS"] as const;
+/** What the booking wizard needs up front: the customer's community and which workouts it offers. */
+export async function getBookingSetup(userId: string) {
+  const db = getDb();
+  const customer = await loadCustomerContext(db, userId);
+  if (!customer) return null;
+  const trainers = await db.trainerProfile.findMany({
+    where: { serviceZoneId: customer.serviceZoneId, isActive: true, user: { status: "ACTIVE" } },
+    select: { workoutCategories: true },
+  });
+  const categories = WORKOUT_CATEGORIES.map((value) => ({
+    value,
+    ...WORKOUT_CATEGORY_INFO[value],
+    trainerCount: trainers.filter((t) => t.workoutCategories.includes(value)).length,
+  }));
+  return { customer, categories };
+}
 
 export async function getCustomerHome(userId: string, now = new Date()) {
   const db = getDb();
