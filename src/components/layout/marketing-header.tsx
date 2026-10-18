@@ -29,7 +29,7 @@ export function MarketingHeader() {
             <Link href="/sign-in">Sign in</Link>
           </Button>
           <Button asChild variant="primary" size="sm">
-            <Link href="/customer">Book a trainer</Link>
+            <Link href="/customer/bookings/new">Book a trainer</Link>
           </Button>
         </div>
       </div>

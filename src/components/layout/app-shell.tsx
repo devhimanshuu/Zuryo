@@ -1,6 +1,7 @@
 import { Wordmark } from "@/components/shared/wordmark";
 import { ROLE_HOME, type Role } from "@/lib/validation/enums";
 import { cn } from "@/lib/utils/cn";
+import type { Persona } from "@/server/auth/actor";
 import { MobileNav } from "./mobile-nav";
 import { NAV } from "./nav-config";
 import { NavLinks } from "./nav-links";
@@ -13,10 +14,15 @@ import { RoleSwitcher } from "./role-switcher";
 export function AppShell({
   role,
   personaName,
+  personaId,
+  personas,
   children,
 }: {
   role: Role;
   personaName: string;
+  /** The seeded user this workspace is acting as (demo identity). */
+  personaId?: string;
+  personas?: Persona[];
   children: React.ReactNode;
 }) {
   const home = ROLE_HOME[role];
@@ -40,13 +46,13 @@ export function AppShell({
           <NavLinks role={role} />
         </nav>
         <div className="p-3">
-          <RoleSwitcher role={role} personaName={personaName} />
+          <RoleSwitcher role={role} personaName={personaName} personaId={personaId} personas={personas} />
         </div>
       </aside>
 
       <div className="min-w-0">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-hairline bg-surface/90 px-2 backdrop-blur lg:hidden">
-          <MobileNav role={role} personaName={personaName} />
+          <MobileNav role={role} personaName={personaName} personaId={personaId} personas={personas} />
           <Wordmark href={home} className="text-2xl" />
           <span className="ml-auto pr-2 text-body-sm text-ink-muted">{NAV[role].title} demo</span>
         </header>

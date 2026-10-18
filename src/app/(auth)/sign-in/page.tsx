@@ -10,14 +10,14 @@ const ROLES = [
     icon: UserRound,
     title: "Customer",
     who: "Priya Sharma · Palm Grove Residences",
-    body: "Bookings, package balance and fitness history.",
+    body: "Book instant or scheduled sessions, manage bookings and see fitness history.",
   },
   {
     href: "/trainer",
     icon: Dumbbell,
     title: "Trainer",
     who: "Arjun Mehta · Strength & mobility",
-    body: "Today's schedule, sessions and availability.",
+    body: "Assigned sessions and availability management.",
   },
   {
     href: "/operations",
@@ -40,7 +40,8 @@ export default function SignInPage() {
         <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
         <p>
           <strong className="font-semibold">There is no real sign-in yet.</strong> This page links to demo
-          workspaces only. Authentication and role-based access control arrive in Phase 2.
+          workspaces only. Inside each workspace you can switch between seeded demo users; the server checks
+          that each one only sees and changes their own bookings, but nothing is password-protected.
         </p>
       </div>
 

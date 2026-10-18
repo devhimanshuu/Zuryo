@@ -1,5 +1,50 @@
-import { CalendarDays, CircleAlert, Construction, type LucideIcon } from "lucide-react";
+import {
+  CalendarDays,
+  CircleAlert,
+  CircleCheck,
+  Construction,
+  Info,
+  TriangleAlert,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+
+const NOTICE = {
+  info: { className: "bg-info-soft text-info", Icon: Info },
+  success: { className: "bg-success-soft text-success", Icon: CircleCheck },
+  warning: { className: "bg-warning-soft text-warning", Icon: TriangleAlert },
+  danger: { className: "border border-danger/30 bg-danger-soft text-danger", Icon: CircleAlert },
+} as const;
+
+/** Inline message with icon + text, so meaning never depends on colour alone. */
+export function Notice({
+  tone = "info",
+  title,
+  children,
+  className,
+  live,
+}: {
+  tone?: keyof typeof NOTICE;
+  title?: string;
+  children?: React.ReactNode;
+  className?: string;
+  /** Announce to screen readers when it appears (errors use role="alert"). */
+  live?: boolean;
+}) {
+  const { className: toneClass, Icon } = NOTICE[tone];
+  return (
+    <div
+      role={live ? (tone === "danger" ? "alert" : "status") : undefined}
+      className={cn("flex gap-3 rounded-md px-3.5 py-3 text-body-sm", toneClass, className)}
+    >
+      <Icon className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <div className="min-w-0">
+        {title ? <p className="font-semibold">{title}</p> : null}
+        {children ? <div className={cn(title && "mt-0.5")}>{children}</div> : null}
+      </div>
+    </div>
+  );
+}
 
 export function EmptyState({
   icon: Icon = CalendarDays,
