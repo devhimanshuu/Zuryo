@@ -1,0 +1,435 @@
+// Zuryo data model. See docs/architecture.md for the reasoning behind each choice.
+// Conventions:
+//   - Money is Decimal(10, 2) in INR rupees. Never Float.
+//   - Percentages are Decimal(5, 2) (10.00 = 10%).
+//   - All timestamps are stored in UTC (timestamptz). Display converts to the zone's timezone.
+//   - Profiles use the owning User's id as their primary key, so a user has at most one of each.
+
+generator client {
+  provider   = "prisma-client-js"
+  // Rust-free client: queries are compiled in TypeScript/WASM and sent through a driver adapter
+  // (@prisma/adapter-pg). No native engine binary to bundle on Vercel.
+  engineType = "client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Enums ─────────────────────────────────────────────────────────────
+
+enum Role {
+  CUSTOMER
+  TRAINER
+  OPERATIONS
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum FitnessLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum FitnessGoal {
+  WEIGHT_LOSS
+  STRENGTH
+  MOBILITY
+  ENDURANCE
+  POSTURE
+  GENERAL_FITNESS
+}
+
+enum WorkoutPreference {
+  MORNING
+  EVENING
+  LOW_IMPACT
+  HIGH_INTENSITY
+  YOGA
+  BODYWEIGHT
+  WEIGHTS
+  OUTDOOR
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  BLOCKED
+}
+
+enum BookingMode {
+  INSTANT
+  SCHEDULED
+}
+
+enum BookingStatus {
+  PENDING // legacy/unassigned: created without a trainer (the Phase 2 engine never creates these)
+  CONFIRMED // trainer assigned and slot reserved (payment collection arrives with checkout)
+  IN_PROGRESS // trainer started the session (SessionRecord.startedAt set)
+  COMPLETED
+  CANCELLED
+  FAILED // payment failed or no trainer could be assigned
+}
+
+/// What a session focuses on. Trainers list the categories they coach; bookings ask for one.
+enum WorkoutCategory {
+  STRENGTH
+  YOGA
+  CARDIO
+  FUNCTIONAL
+  MOBILITY
+}
+
+enum PricingKind {
+  NORMAL
+  PEAK
+}
+
+enum PackageStatus {
+  ACTIVE
+  EXHAUSTED
+  EXPIRED
+  CANCELLED
+}
+
+enum PackageEntryReason {
+  BOOKING_DEBIT
+  CANCELLATION_REFUND
+  ADJUSTMENT
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  SIMULATED
+}
+
+enum NotificationType {
+  BOOKING_ASSIGNED
+  BOOKING_CANCELLED
+  BOOKING_RESCHEDULED
+  SESSION_STARTING
+  SESSION_WARNING
+  SESSION_COMPLETED
+}
+
+// ─── Identity ──────────────────────────────────────────────────────────
+
+model User {
+  id        String     @id @default(cuid())
+  name      String
+  email     String     @unique
+  phone     String?
+  role      Role
+  status    UserStatus @default(ACTIVE)
+  createdAt DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime   @updatedAt @db.Timestamptz(3)
+
+  customerProfile   CustomerProfile?
+  trainerProfile    TrainerProfile?
+  notifications     Notification[]
+  cancelledBookings Booking[]        @relation("BookingCancelledBy")
+
+  @@index([role, status])
+}
+
+// ─── Places ────────────────────────────────────────────────────────────
+
+/// A residential community (society) or service area. Seeded coordinates stand in for GPS.
+model ServiceZone {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  city      String
+  timezone  String   @default("Asia/Kolkata")
+  latitude  Decimal  @db.Decimal(9, 6)
+  longitude Decimal  @db.Decimal(9, 6)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  customers CustomerProfile[]
+  trainers  TrainerProfile[]
+  bookings  Booking[]
+}
+
+// ─── Profiles ──────────────────────────────────────────────────────────
+
+model CustomerProfile {
+  userId             String              @id
+  serviceZoneId      String
+  /// Tower / block within the community, e.g. "Tower B, 1204". Fictional in seed data.
+  addressLine        String?
+  age                Int?
+  weightKg           Decimal?            @db.Decimal(5, 1)
+  fitnessGoals       FitnessGoal[]
+  fitnessLevel       FitnessLevel?
+  workoutPreferences WorkoutPreference[]
+  /// Set when the customer finishes the assessment; null means "not yet assessed".
+  assessedAt         DateTime?           @db.Timestamptz(3)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serviceZone ServiceZone @relation(fields: [serviceZoneId], references: [id], onDelete: Restrict)
+  bookings    Booking[]
+  packages    Package[]
+
+  @@index([serviceZoneId])
+}
+
+model TrainerProfile {
+  userId          String   @id
+  serviceZoneId   String
+  bio               String?
+  specializations   String[]
+  /// Categories the matcher may assign this trainer to. The first entry is their primary focus.
+  workoutCategories WorkoutCategory[] @default([])
+  experienceYears   Int?
+  photoUrl        String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+
+  user              User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serviceZone       ServiceZone           @relation(fields: [serviceZoneId], references: [id], onDelete: Restrict)
+  availability      TrainerAvailability[]
+  bookings          Booking[]             @relation("AssignedTrainer")
+  preferredBookings Booking[]             @relation("PreferredTrainer")
+
+  @@index([serviceZoneId, isActive])
+}
+
+// ─── Scheduling ────────────────────────────────────────────────────────
+
+/// Time a trainer offers (AVAILABLE) or has blocked off (BLOCKED). Bookings consume AVAILABLE time;
+/// the booking engine (Phase 2) checks both this table and existing bookings for overlaps.
+model TrainerAvailability {
+  id        String             @id @default(cuid())
+  trainerId String
+  startAt   DateTime           @db.Timestamptz(3)
+  endAt     DateTime           @db.Timestamptz(3)
+  status    AvailabilityStatus @default(AVAILABLE)
+  note      String?
+  createdAt DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime           @updatedAt @db.Timestamptz(3)
+
+  trainer TrainerProfile @relation(fields: [trainerId], references: [userId], onDelete: Cascade)
+
+  @@index([trainerId, startAt, endAt])
+}
+
+// ─── Pricing ───────────────────────────────────────────────────────────
+
+/// One active rule per kind (enforced by a partial unique index in the migration).
+/// Editing pricing creates a new rule and deactivates the old one, so bookings keep pointing at
+/// the rule that priced them.
+model PricingRule {
+  id                String      @id @default(cuid())
+  name              String
+  kind              PricingKind
+  sessionPrice      Decimal     @db.Decimal(10, 2)
+  commissionPercent Decimal     @db.Decimal(5, 2)
+  currency          String      @default("INR")
+  isActive          Boolean     @default(true)
+  effectiveFrom     DateTime    @default(now()) @db.Timestamptz(3)
+  createdAt         DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime    @updatedAt @db.Timestamptz(3)
+
+  peakWindows PeakWindow[]
+  bookings    Booking[]
+
+  @@index([kind, isActive])
+}
+
+/// A recurring local-time window in which PEAK pricing applies, e.g. Mon–Sun 06:00–09:00.
+/// Minutes are measured from local midnight in the booking zone's timezone.
+model PeakWindow {
+  id            String   @id @default(cuid())
+  pricingRuleId String
+  label         String
+  /// ISO weekdays: 1 = Monday … 7 = Sunday.
+  daysOfWeek    Int[]
+  startMinute   Int
+  endMinute     Int
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+
+  pricingRule PricingRule @relation(fields: [pricingRuleId], references: [id], onDelete: Cascade)
+
+  @@index([pricingRuleId])
+}
+
+// ─── Bookings ──────────────────────────────────────────────────────────
+
+model Booking {
+  id                 String        @id @default(cuid())
+  /// Human-friendly reference shown to customers, e.g. ZY-24A7Q.
+  reference          String        @unique
+  customerId         String
+  trainerId          String?
+  preferredTrainerId String?
+  serviceZoneId      String
+  packageId          String?
+  mode               BookingMode
+  status             BookingStatus @default(PENDING)
+  startAt            DateTime      @db.Timestamptz(3)
+  endAt              DateTime      @db.Timestamptz(3)
+  /// Required for every booking the engine creates; nullable only for rows that predate Phase 2.
+  workoutCategory    WorkoutCategory?
+  /// Optional note from the customer to the trainer (max 500 chars, validated in the app).
+  customerNotes      String?
+
+  // Immutable price snapshot, written once by the server at confirmation.
+  pricingRuleId     String
+  isPeak            Boolean
+  sessionPrice      Decimal @db.Decimal(10, 2)
+  commissionPercent Decimal @db.Decimal(5, 2)
+  commissionAmount  Decimal @db.Decimal(10, 2)
+  totalAmount       Decimal @db.Decimal(10, 2)
+  currency          String  @default("INR")
+
+  /// Client-generated key so a retried "create booking" request returns the same booking.
+  idempotencyKey     String?   @unique
+  rescheduleCount    Int       @default(0)
+  lastRescheduledAt  DateTime? @db.Timestamptz(3)
+  cancelledAt        DateTime? @db.Timestamptz(3)
+  cancellationReason String?
+  /// Who cancelled (customer, trainer or operations user). Null for active bookings.
+  cancelledById      String?
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @db.Timestamptz(3)
+
+  cancelledBy      User?                @relation("BookingCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  customer         CustomerProfile      @relation(fields: [customerId], references: [userId], onDelete: Restrict)
+  trainer          TrainerProfile?      @relation("AssignedTrainer", fields: [trainerId], references: [userId], onDelete: SetNull)
+  preferredTrainer TrainerProfile?      @relation("PreferredTrainer", fields: [preferredTrainerId], references: [userId], onDelete: SetNull)
+  serviceZone      ServiceZone          @relation(fields: [serviceZoneId], references: [id], onDelete: Restrict)
+  package          Package?             @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  pricingRule      PricingRule          @relation(fields: [pricingRuleId], references: [id], onDelete: Restrict)
+  payments         Payment[]
+  sessionRecord    SessionRecord?
+  packageEntries   PackageLedgerEntry[]
+  notifications    Notification[]
+
+  @@index([customerId, startAt])
+  @@index([trainerId, startAt])
+  @@index([status, startAt])
+  @@index([serviceZoneId, startAt])
+}
+
+// ─── Packages ──────────────────────────────────────────────────────────
+
+/// A bundle of sessions. usedSessions is a cached counter kept in step with the ledger inside the
+/// same transaction; the ledger is the audit trail and the duplicate-request guard.
+model Package {
+  id            String        @id @default(cuid())
+  customerId    String
+  name          String
+  totalSessions Int
+  usedSessions  Int           @default(0)
+  pricePaid     Decimal       @db.Decimal(10, 2)
+  status        PackageStatus @default(ACTIVE)
+  purchasedAt   DateTime      @default(now()) @db.Timestamptz(3)
+  expiresAt     DateTime?     @db.Timestamptz(3)
+  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime      @updatedAt @db.Timestamptz(3)
+
+  customer CustomerProfile      @relation(fields: [customerId], references: [userId], onDelete: Restrict)
+  bookings Booking[]
+  entries  PackageLedgerEntry[]
+
+  @@index([customerId, status])
+}
+
+/// One row per balance movement. The unique (bookingId, reason) pair makes "debit this booking"
+/// and "refund this booking" each happen at most once, however many times a request is retried.
+model PackageLedgerEntry {
+  id        String             @id @default(cuid())
+  packageId String
+  bookingId String?
+  /// -1 for a debit, +1 for a refund.
+  delta     Int
+  reason    PackageEntryReason
+  note      String?
+  createdAt DateTime           @default(now()) @db.Timestamptz(3)
+
+  package Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@unique([bookingId, reason])
+  @@index([packageId, createdAt])
+}
+
+// ─── Payments ──────────────────────────────────────────────────────────
+
+/// Simulated payments only. No card data is ever stored or collected.
+model Payment {
+  id                String          @id @default(cuid())
+  bookingId         String
+  amount            Decimal         @db.Decimal(10, 2)
+  currency          String          @default("INR")
+  status            PaymentStatus   @default(PENDING)
+  provider          PaymentProvider @default(SIMULATED)
+  providerReference String?         @unique
+  idempotencyKey    String          @unique
+  failureReason     String?
+  createdAt         DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime        @updatedAt @db.Timestamptz(3)
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+
+  @@index([bookingId, status])
+}
+
+// ─── Sessions ──────────────────────────────────────────────────────────
+
+/// Server-authoritative session timing. startedAt/endsAt are written by the server when the trainer
+/// starts; clients derive the countdown from these, never from a local counter.
+model SessionRecord {
+  id                   String    @id @default(cuid())
+  bookingId            String    @unique
+  startedAt            DateTime  @db.Timestamptz(3)
+  endsAt               DateTime  @db.Timestamptz(3)
+  warningSentAt        DateTime? @db.Timestamptz(3)
+  completedAt          DateTime? @db.Timestamptz(3)
+  /// [{ "name": "Goblet squat", "sets": 3, "reps": 12 }, { "name": "Brisk walk", "durationMin": 10 }]
+  activities           Json      @default("[]")
+  trainerNotes         String?
+  suggestedNextWorkout String?
+  customerFeedback     String?
+  createdAt            DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime  @updatedAt @db.Timestamptz(3)
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+
+  @@index([completedAt])
+}
+
+// ─── Notifications ─────────────────────────────────────────────────────
+
+/// In-app notifications only (no push/SMS in the MVP).
+model Notification {
+  id          String           @id @default(cuid())
+  recipientId String
+  bookingId   String?
+  type        NotificationType
+  title       String
+  message     String
+  readAt      DateTime?        @db.Timestamptz(3)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+
+  recipient User     @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@index([recipientId, readAt, createdAt(sort: Desc)])
+}

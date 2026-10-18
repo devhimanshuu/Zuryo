@@ -1,0 +1,131 @@
+import { ArrowRight, Bell, ClipboardCheck, NotebookPen } from "lucide-react";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { ErrorState, EmptyState, PhaseNote } from "@/components/shared/states";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { BookingItem } from "@/features/bookings/booking-item";
+import { PackageMeter } from "@/features/customers/package-meter";
+import { safely } from "@/lib/utils/errors";
+import { formatDay, greeting, titleCase } from "@/lib/utils/format";
+import { DEMO_PERSONAS } from "@/server/demo";
+import { getCustomerHome } from "@/server/queries/customer";
+
+export const metadata: Metadata = { title: "Home" };
+
+export default async function CustomerHomePage() {
+  const result = await safely(() => getCustomerHome(DEMO_PERSONAS.CUSTOMER.userId));
+  if (!result.ok) return <ErrorState message={result.error.message} />;
+  const { profile, upcoming, recent, pkg, unread } = result.data;
+  if (!profile)
+    return <ErrorState title="Demo customer not found" message="Run npm run db:seed to create demo data." />;
+
+  const firstName = profile.user.name.split(" ")[0];
+  const next = upcoming[0];
+
+  return (
+    <div className="grid gap-8">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-body-sm text-ink-muted">{profile.serviceZone.name}</p>
+          <h1 className="font-display text-display-md">
+            {greeting()}, {firstName}
+          </h1>
+        </div>
+        {unread > 0 ? (
+          <p className="inline-flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1 text-body-sm font-semibold text-brand">
+            <Bell className="size-4" aria-hidden /> {unread} unread update{unread === 1 ? "" : "s"}
+          </p>
+        ) : null}
+      </header>
+
+      <section aria-labelledby="next-heading" className="grid gap-3">
+        <h2 id="next-heading" className="text-heading-md font-semibold">
+          Your next session
+        </h2>
+        {next ? (
+          <BookingItem
+            b={{
+              ...next,
+              counterpartLabel: "Trainer",
+              counterpartName: next.trainer?.user.name ?? null,
+              location: next.serviceZone.name,
+            }}
+          />
+        ) : (
+          <EmptyState
+            title="No upcoming sessions"
+            body="When you book a trainer, your next session shows up here."
+          />
+        )}
+        <PhaseNote phase={2}>
+          Booking a new session (instant or scheduled) and checkout are built next.
+        </PhaseNote>
+      </section>
+
+      <div className="grid gap-5 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Package</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {pkg ? (
+              <PackageMeter name={pkg.name} total={pkg.totalSessions} used={pkg.usedSessions} />
+            ) : (
+              <p className="text-ink-muted">No active package. You pay per session.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Fitness profile</CardTitle>
+            <ClipboardCheck className="size-5 text-ink-subtle" aria-hidden />
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {profile.assessedAt ? (
+              <>
+                <p className="text-ink-muted">
+                  {profile.fitnessLevel ? titleCase(profile.fitnessLevel) : "Level not set"}
+                  {profile.fitnessGoals.length > 0
+                    ? ` · ${profile.fitnessGoals.map(titleCase).join(", ")}`
+                    : ""}
+                </p>
+                <Link
+                  href="/customer/fitness"
+                  className="inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline"
+                >
+                  View profile and history <ArrowRight className="size-4" aria-hidden />
+                </Link>
+              </>
+            ) : (
+              <p className="text-ink-muted">Assessment not completed yet.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent sessions</CardTitle>
+            <NotebookPen className="size-5 text-ink-subtle" aria-hidden />
+          </CardHeader>
+          <CardContent>
+            {recent.length > 0 ? (
+              <ul className="grid gap-3">
+                {recent.map((b) => (
+                  <li key={b.id} className="flex items-baseline justify-between gap-3">
+                    <span className="font-semibold">{formatDay(b.startAt)}</span>
+                    <span className="truncate text-body-sm text-ink-muted">
+                      with {b.trainer?.user.name ?? "—"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <CardDescription>Completed sessions will appear here.</CardDescription>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

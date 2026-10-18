@@ -1,0 +1,178 @@
+@import "tailwindcss";
+
+/*
+ * Zuryo design tokens — mirrors the Zuryo design system (tokens.json).
+ * Colours are CSS variables so a future dark theme only redefines :root values.
+ */
+:root {
+  --surface-000: #ffffff;
+  --surface-100: #f6f4ef;
+  --surface-200: #ece8df;
+  --surface-inverse: #14201b;
+  --ink-900: #15201b;
+  --ink-600: #4c5550;
+  --ink-400: #646c67;
+  --ink-on-inverse: #f6f4ef;
+  --border-100: #e3ded4;
+  --border-control: #878074;
+  --brand-600: #1f5442;
+  --brand-700: #173f32;
+  --brand-100: #e2ede6;
+  --on-brand: #ffffff;
+  --accent-500: #e0582e;
+  --accent-600: #b8441c;
+  --accent-100: #fbe6dc;
+  --on-accent: #1c0e08;
+  --success-600: #16704f;
+  --success-100: #e1f0e8;
+  --warning-600: #8f5300;
+  --warning-100: #faedd3;
+  --danger-600: #b3261e;
+  --danger-100: #fbe5e2;
+  --on-danger: #ffffff;
+  --info-600: #2d5ba8;
+  --info-100: #e4ebf7;
+  --success-on-inverse: #6fcb9f;
+  --warning-on-inverse: #e9b25c;
+  --focus: #b8441c;
+}
+
+@theme inline {
+  --color-surface: var(--surface-100);
+  --color-raised: var(--surface-000);
+  --color-sunken: var(--surface-200);
+  --color-inverse: var(--surface-inverse);
+  --color-ink: var(--ink-900);
+  --color-ink-muted: var(--ink-600);
+  --color-ink-subtle: var(--ink-400);
+  --color-ink-inverse: var(--ink-on-inverse);
+  --color-hairline: var(--border-100);
+  --color-control: var(--border-control);
+  --color-brand: var(--brand-600);
+  --color-brand-strong: var(--brand-700);
+  --color-brand-soft: var(--brand-100);
+  --color-on-brand: var(--on-brand);
+  --color-accent: var(--accent-500);
+  --color-accent-text: var(--accent-600);
+  --color-accent-soft: var(--accent-100);
+  --color-on-accent: var(--on-accent);
+  --color-success: var(--success-600);
+  --color-success-soft: var(--success-100);
+  --color-warning: var(--warning-600);
+  --color-warning-soft: var(--warning-100);
+  --color-danger: var(--danger-600);
+  --color-danger-soft: var(--danger-100);
+  --color-on-danger: var(--on-danger);
+  --color-info: var(--info-600);
+  --color-info-soft: var(--info-100);
+  --color-success-inverse: var(--success-on-inverse);
+  --color-warning-inverse: var(--warning-on-inverse);
+  --color-focus: var(--focus);
+
+  --font-sans: "Hanken Grotesk Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+
+  /* Type scale (size / line-height) */
+  --text-display-xl: 4rem;
+  --text-display-xl--line-height: 1;
+  --text-display-lg: 3rem;
+  --text-display-lg--line-height: 1.08;
+  --text-display-md: 2.125rem;
+  --text-display-md--line-height: 1.18;
+  --text-heading-lg: 1.5rem;
+  --text-heading-lg--line-height: 1.25;
+  --text-heading-md: 1.125rem;
+  --text-heading-md--line-height: 1.33;
+  --text-body-lg: 1.0625rem;
+  --text-body-lg--line-height: 1.53;
+  --text-body-md: 0.9375rem;
+  --text-body-md--line-height: 1.47;
+  --text-body-sm: 0.8125rem;
+  --text-body-sm--line-height: 1.38;
+  --text-eyebrow: 0.75rem;
+  --text-eyebrow--line-height: 1.33;
+  --text-numeric-xl: 5.5rem;
+  --text-numeric-xl--line-height: 1;
+  --text-numeric-lg: 2rem;
+  --text-numeric-lg--line-height: 1.12;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  --shadow-1: 0 1px 2px rgb(21 32 27 / 0.06);
+  --shadow-2: 0 6px 20px -6px rgb(21 32 27 / 0.14), 0 1px 2px rgb(21 32 27 / 0.06);
+  --shadow-3: 0 24px 48px -12px rgb(21 32 27 / 0.24);
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-enter: cubic-bezier(0, 0, 0, 1);
+
+  --animate-fade-in: fade-in 200ms var(--ease-enter);
+  --animate-sheet-in: sheet-in 320ms var(--ease-enter);
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes sheet-in {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-surface font-sans text-body-md text-ink antialiased;
+  }
+  ::selection {
+    background: var(--brand-100);
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility container-page {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 1200px;
+  padding-inline: 1rem;
+  @media (width >= 40rem) {
+    padding-inline: 1.5rem;
+  }
+  @media (width >= 64rem) {
+    padding-inline: 2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

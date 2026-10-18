@@ -1,0 +1,66 @@
+import { describe, expect, it } from "vitest";
+import { buildSeedPlan } from "../prisma/seed-data";
+
+const ANCHOR = new Date("2026-10-19T04:30:00Z");
+
+describe("seed plan", () => {
+  const plan = buildSeedPlan(ANCHOR);
+
+  it("is deterministic for a given day", () => {
+    expect(buildSeedPlan(new Date("2026-10-19T12:00:00Z"))).toEqual(plan);
+  });
+
+  it("uses fixed, unique ids so re-running upserts instead of duplicating", () => {
+    const ids = [
+      ...plan.bookings,
+      ...plan.availability,
+      ...plan.payments,
+      ...plan.sessions,
+      ...plan.ledger,
+      ...plan.notifications,
+      ...plan.packages,
+    ].map((r) => r.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.every((id) => id.startsWith("seed_"))).toBe(true);
+    const refs = plan.bookings.map((b) => b.reference);
+    expect(new Set(refs).size).toBe(refs.length);
+  });
+
+  it("meets the minimum demo population", () => {
+    expect(plan.customers.length).toBeGreaterThanOrEqual(3);
+    expect(plan.trainers.length).toBeGreaterThanOrEqual(3);
+    expect(plan.sessions.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("only uses fictional, undeliverable email addresses", () => {
+    const emails = [...plan.customers, ...plan.trainers, plan.operations].map((u) => u.email);
+    expect(emails.every((e) => e.endsWith(".example"))).toBe(true);
+  });
+
+  it("prices every booking consistently with its peak flag", () => {
+    for (const b of plan.bookings) {
+      expect(b.totalAmount).toBe(b.isPeak ? "548.90" : "438.90");
+    }
+    expect(plan.bookings.some((b) => b.isPeak)).toBe(true);
+    expect(plan.bookings.some((b) => !b.isPeak)).toBe(true);
+  });
+
+  it("keeps package balances equal to their ledger", () => {
+    for (const p of plan.packages) {
+      const net = plan.ledger.filter((e) => e.packageId === p.id).reduce((s, e) => s + e.delta, 0);
+      expect(p.usedSessions).toBe(-net);
+      expect(p.usedSessions).toBeLessThanOrEqual(p.totalSessions);
+    }
+  });
+
+  it("never double-books a trainer", () => {
+    const active = plan.bookings.filter((b) => b.trainerId && b.status !== "CANCELLED");
+    for (const a of active) {
+      for (const b of active) {
+        if (a.id >= b.id || a.trainerId !== b.trainerId) continue;
+        const overlap = a.startAt < b.endAt && b.startAt < a.endAt;
+        expect(overlap, `${a.reference} overlaps ${b.reference}`).toBe(false);
+      }
+    }
+  });
+});
