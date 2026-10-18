@@ -1,62 +1,62 @@
 import { z } from "zod";
-import { bookingModeSchema } from "./enums";
+import { startTimeProblem } from "@/lib/booking/availability";
+import {
+  CANCELLATION_REASON_MAX_LENGTH,
+  INSTANT_WINDOW_MINUTES,
+  MAX_ADVANCE_DAYS,
+  NOTES_MAX_LENGTH,
+  SESSION_MINUTES,
+  SLOT_INTERVAL_MINUTES,
+} from "@/lib/booking/rules";
+import { isValidDateKey } from "@/lib/booking/time";
+import { availabilityStatusSchema, bookingModeSchema, workoutCategorySchema } from "./enums";
 
-export const SESSION_MINUTES = 60;
-export const INSTANT_WINDOW_MINUTES = 60;
-export const MAX_ADVANCE_DAYS = 30;
+export { INSTANT_WINDOW_MINUTES, MAX_ADVANCE_DAYS, SESSION_MINUTES };
 
-const cuid = z.string().trim().min(1, "Required").max(40);
+const id = z.string().trim().min(1, "Required").max(40);
+
+/** Drop control characters (keeping newlines and tabs) from free text before it is stored. */
+const cleanText = (max: number, tooLong: string) =>
+  z
+    .string()
+    .max(max * 2) // cheap upper bound before trimming
+    .transform((v) => v.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "").trim())
+    .pipe(z.string().max(max, tooLong))
+    .optional()
+    .transform((v) => (v ? v : undefined));
+
+export const bookingNotesSchema = cleanText(
+  NOTES_MAX_LENGTH,
+  `Keep notes under ${NOTES_MAX_LENGTH} characters`,
+);
 
 /**
- * What a customer sends to create a booking. Note what is NOT here: price, commission, total and
- * trainer assignment are all decided by the server. `now` is injectable for deterministic tests.
+ * What a customer sends to create a booking. Note what is NOT here: price, commission, total,
+ * service zone and the assigned trainer are all decided by the server. `preferredTrainerId` is the
+ * trainer the customer picked from the server's matches; the server re-checks that they are still
+ * eligible. `expectedTotal` is only compared with the server's price, never used as the price.
+ * `now` is injectable for deterministic tests.
  */
 export function createBookingInputSchema(now: () => Date = () => new Date()) {
   return z
     .object({
       mode: bookingModeSchema,
-      serviceZoneId: cuid,
-      /** Required for SCHEDULED; must be omitted for INSTANT (the server picks the start). */
-      startAt: z.coerce.date().optional(),
-      preferredTrainerId: cuid.optional(),
+      workoutCategory: workoutCategorySchema,
+      /** SCHEDULED: the chosen slot. INSTANT: the slot the server proposed in its instant offer. */
+      startAt: z.coerce.date({ error: "Choose a time" }),
+      preferredTrainerId: id.optional(),
+      notes: bookingNotesSchema,
+      expectedTotal: z
+        .string()
+        .regex(/^\d{1,8}\.\d{2}$/, "Invalid amount")
+        .optional(),
       /** Client-generated UUID; retries with the same key return the same booking. */
       idempotencyKey: z.string().uuid("idempotencyKey must be a UUID"),
     })
     .strict()
     .superRefine((input, ctx) => {
-      if (input.mode === "INSTANT") {
-        if (input.startAt) {
-          ctx.addIssue({
-            code: "custom",
-            path: ["startAt"],
-            message: "Instant bookings don't take a start time",
-          });
-        }
-        return;
-      }
-      if (!input.startAt) {
-        ctx.addIssue({ code: "custom", path: ["startAt"], message: "Choose a time for a scheduled booking" });
-        return;
-      }
-      const start = input.startAt.getTime();
-      const current = now().getTime();
-      if (start <= current + INSTANT_WINDOW_MINUTES * 60_000) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["startAt"],
-          message: "Scheduled sessions start more than 60 minutes from now. Use Instant for sooner.",
-        });
-      }
-      if (start > current + MAX_ADVANCE_DAYS * 86_400_000) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["startAt"],
-          message: `Book at most ${MAX_ADVANCE_DAYS} days ahead`,
-        });
-      }
-      if (input.startAt.getUTCMinutes() % 30 !== 0 || input.startAt.getUTCSeconds() !== 0) {
-        ctx.addIssue({ code: "custom", path: ["startAt"], message: "Slots start on the hour or half hour" });
-      }
+      const problem = startTimeProblem(input.mode, input.startAt, now());
+      if (problem) ctx.addIssue({ code: "custom", path: ["startAt"], message: problem });
     });
 }
 
@@ -64,7 +64,53 @@ export type CreateBookingInput = z.infer<ReturnType<typeof createBookingInputSch
 
 export const cancelBookingInputSchema = z
   .object({
-    bookingId: cuid,
-    reason: z.string().trim().max(280).optional(),
+    bookingId: id,
+    reason: cleanText(
+      CANCELLATION_REASON_MAX_LENGTH,
+      `Keep the reason under ${CANCELLATION_REASON_MAX_LENGTH} characters`,
+    ),
   })
   .strict();
+
+export type CancelBookingInput = z.infer<typeof cancelBookingInputSchema>;
+
+/** Wizard lookups. */
+export const scheduleQuerySchema = z.object({ workoutCategory: workoutCategorySchema }).strict();
+export const instantQuerySchema = z.object({ workoutCategory: workoutCategorySchema }).strict();
+export const matchQuerySchema = z
+  .object({
+    workoutCategory: workoutCategorySchema,
+    mode: bookingModeSchema,
+    startAt: z.coerce.date({ error: "Choose a time" }),
+  })
+  .strict();
+
+const minuteOfDay = z
+  .number({ error: "Choose a time" })
+  .int()
+  .min(0)
+  .max(24 * 60)
+  .refine((m) => m % SLOT_INTERVAL_MINUTES === 0, "Times are on the hour or half hour");
+
+/** A trainer adding available or blocked time on one local day. */
+export const availabilityInputSchema = z
+  .object({
+    date: z.string().refine(isValidDateKey, "Choose a date"),
+    startMinute: minuteOfDay,
+    endMinute: minuteOfDay,
+    status: availabilityStatusSchema,
+    note: cleanText(80, "Keep the note under 80 characters"),
+  })
+  .strict()
+  .refine((v) => v.endMinute > v.startMinute, {
+    message: "End time must be after start time",
+    path: ["endMinute"],
+  })
+  .refine((v) => v.status === "BLOCKED" || v.endMinute - v.startMinute >= SESSION_MINUTES, {
+    message: `Available time must be at least ${SESSION_MINUTES} minutes long`,
+    path: ["endMinute"],
+  });
+
+export type AvailabilityInput = z.infer<typeof availabilityInputSchema>;
+
+export const removeAvailabilityInputSchema = z.object({ availabilityId: id }).strict();
