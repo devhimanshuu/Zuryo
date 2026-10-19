@@ -1,101 +1,109 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/shared/page-header";
-import { ErrorState, EmptyState, PhaseNote } from "@/components/shared/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState, ErrorState } from "@/components/shared/states";
+import { PricingEditor } from "@/features/operations/pricing-editor";
+import { getDb } from "@/lib/db";
 import { calculatePriceBreakdown, formatINR } from "@/lib/pricing";
 import { safely } from "@/lib/utils/errors";
 import { formatDays, formatSlot, minutesToClock } from "@/lib/utils/format";
-import { getActivePricing } from "@/server/queries/operations";
+import { getActor } from "@/server/auth/actor";
+import { getPricingAdminView } from "@/server/booking/pricing-service";
 
 export const metadata: Metadata = { title: "Pricing rules" };
 
 export default async function PricingPage() {
-  const result = await safely(getActivePricing);
+  const actor = await getActor("OPERATIONS");
+  const result = await safely(() => getPricingAdminView(getDb()));
   if (!result.ok) return <ErrorState message={result.error.message} />;
+  const { standard, peak, history } = result.data;
 
   return (
-    <div>
+    <div className="grid gap-8">
       <PageHeader
         title="Pricing rules"
-        description="Active rules used by the server to price new bookings. Existing bookings keep the price they were confirmed at."
+        description={`Editing as ${actor.name} (operations). The server prices every new booking from the active rules; existing bookings keep the price they were confirmed at.`}
+        className="pb-0"
       />
-      {result.data.length === 0 ? (
-        <EmptyState
-          title="No active pricing rules"
-          body="Run the seed to create the default normal and peak rules."
-        />
+      {!standard ? (
+        <EmptyState title="No active standard rule" body="Run the seed to create the default normal and peak rules." />
       ) : (
-        <div className="grid gap-5 lg:grid-cols-2">
-          {result.data.map((rule) => {
-            const b = calculatePriceBreakdown(rule);
-            return (
-              <Card key={rule.id}>
-                <CardHeader>
-                  <div>
-                    <CardTitle>{rule.name}</CardTitle>
-                    <p className="text-body-sm text-ink-muted">
-                      Effective since {formatSlot(rule.effectiveFrom)}
-                    </p>
-                  </div>
-                  <span
-                    className={
-                      rule.kind === "PEAK"
-                        ? "rounded-sm bg-accent-soft px-2 py-1 text-xs font-semibold text-accent-text"
-                        : "rounded-sm bg-sunken px-2 py-1 text-xs font-semibold text-ink-muted"
-                    }
-                  >
-                    {rule.kind === "PEAK" ? "Peak" : "Normal"}
-                  </span>
-                </CardHeader>
-                <CardContent>
-                  <dl className="grid grid-cols-[1fr_auto] gap-y-2">
-                    <dt className="text-ink-muted">Session price</dt>
-                    <dd className="text-right font-semibold tabular">{formatINR(b.sessionPrice)}</dd>
-                    <dt className="text-ink-muted">Society commission</dt>
-                    <dd className="text-right font-semibold tabular">
-                      {Number(b.commissionPercent)}% · {formatINR(b.commissionAmount)}
-                    </dd>
-                    <dt className="border-t border-hairline pt-2 font-semibold">Customer pays</dt>
-                    <dd className="border-t border-hairline pt-2 text-right text-heading-md font-semibold tabular">
-                      {formatINR(b.totalAmount)}
-                    </dd>
-                  </dl>
-                  {rule.peakWindows.length > 0 ? (
-                    <div className="mt-5">
-                      <p className="text-eyebrow font-semibold tracking-[0.08em] text-ink-muted uppercase">
-                        Peak windows (IST)
-                      </p>
-                      <ul className="mt-2 grid gap-1.5">
-                        {rule.peakWindows.map((w) => (
-                          <li
-                            key={w.id}
-                            className="flex justify-between gap-3 rounded-md bg-sunken px-3 py-2 text-body-sm"
-                          >
-                            <span className="font-semibold">{w.label}</span>
-                            <span className="text-ink-muted tabular">
-                              {formatDays(w.daysOfWeek)} · {minutesToClock(w.startMinute)}–
-                              {minutesToClock(w.endMinute)}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : (
-                    <p className="mt-5 text-body-sm text-ink-muted">
-                      Applies to any start time outside peak windows.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+        <PricingEditor
+          // Remount after a save so the form shows the new versions.
+          key={`${standard.id}:${peak?.id ?? "none"}`}
+          defaults={{
+            standard: { sessionPrice: standard.sessionPrice, commissionPercent: standard.commissionPercent },
+            peak: {
+              sessionPrice: peak?.sessionPrice ?? standard.sessionPrice,
+              commissionPercent: peak?.commissionPercent ?? standard.commissionPercent,
+              windows: peak?.windows.length
+                ? peak.windows
+                : [{ label: "Weekday mornings", daysOfWeek: [1, 2, 3, 4, 5], startMinute: 360, endMinute: 540 }],
+            },
+            basedOn: { standardRuleId: standard.id, peakRuleId: peak?.id ?? null },
+          }}
+        />
       )}
-      <div className="mt-6">
-        <PhaseNote>
-          Editing rules (validated, versioned so past bookings keep their price) from this screen.
-        </PhaseNote>
-      </div>
+
+      <section aria-labelledby="history-h" className="grid gap-3">
+        <h2 id="history-h" className="text-heading-md font-semibold">
+          Version history
+        </h2>
+        <p className="text-body-sm text-ink-muted">
+          Every saved change is a new rule. Bookings point at the version that priced them, which is why the counts
+          below never move when prices change.
+        </p>
+        <div className="overflow-x-auto rounded-lg border border-hairline bg-raised">
+          <table className="w-full min-w-[640px] text-left text-body-md">
+            <caption className="sr-only">Pricing rule versions</caption>
+            <thead className="border-b border-hairline bg-sunken/60 text-eyebrow font-semibold tracking-[0.08em] text-ink-muted uppercase">
+              <tr>
+                <th scope="col" className="px-4 py-3">Rule</th>
+                <th scope="col" className="px-4 py-3">Effective from</th>
+                <th scope="col" className="px-4 py-3 text-right">Session</th>
+                <th scope="col" className="px-4 py-3 text-right">Customer pays</th>
+                <th scope="col" className="px-4 py-3">Windows</th>
+                <th scope="col" className="px-4 py-3 text-right">Bookings priced</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-hairline">
+              {history.map((r) => {
+                const b = calculatePriceBreakdown(r);
+                return (
+                  <tr key={r.id} className={r.isActive ? "" : "text-ink-muted"}>
+                    <td className="px-4 py-3">
+                      <span className="font-semibold">{r.kind === "PEAK" ? "Peak" : "Standard"}</span>{" "}
+                      {r.isActive ? (
+                        <span className="ml-1 rounded-sm bg-success-soft px-1.5 py-0.5 text-xs font-semibold text-success">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="ml-1 text-xs">Retired</span>
+                      )}
+                      <span className="block text-body-sm text-ink-subtle">{r.createdBy ? `by ${r.createdBy}` : "seeded"}</span>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">{formatSlot(r.effectiveFrom)}</td>
+                    <td className="px-4 py-3 text-right tabular">
+                      {formatINR(b.sessionPrice)}
+                      <span className="block text-body-sm text-ink-subtle">+{Number(b.commissionPercent)}%</span>
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold tabular">{formatINR(b.totalAmount)}</td>
+                    <td className="px-4 py-3 text-body-sm">
+                      {r.windows.length
+                        ? r.windows.map((w) => (
+                            <span key={w.label} className="block">
+                              {w.label}: {formatDays(w.daysOfWeek)} {minutesToClock(w.startMinute)}–{minutesToClock(w.endMinute)}
+                            </span>
+                          ))
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular">{r.bookingCount}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }

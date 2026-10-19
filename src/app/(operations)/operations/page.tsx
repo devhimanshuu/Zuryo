@@ -1,28 +1,59 @@
-import { TriangleAlert } from "lucide-react";
+import { ArrowRight, TriangleAlert } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState, EmptyState } from "@/components/shared/states";
 import { Metric } from "@/components/shared/metric";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScheduleRow } from "@/features/bookings/schedule-row";
+import { ReconcileButton } from "@/features/operations/reconcile-button";
+import { getDb } from "@/lib/db";
+import { calculatePriceBreakdown, formatINR } from "@/lib/pricing";
 import { safely } from "@/lib/utils/errors";
-import { formatSlot } from "@/lib/utils/format";
-import { getOperationsOverview } from "@/server/queries/operations";
+import { formatSlot, formatTime } from "@/lib/utils/format";
+import { getPricingAdminView } from "@/server/booking/pricing-service";
+import { getAiUsage } from "@/server/fitness/fitness-service";
+import { getOperationsFinance, getOperationsOverview } from "@/server/queries/operations";
+import { getSessionsNeedingAttention } from "@/server/sessions/session-service";
 
 export const metadata: Metadata = { title: "Operations overview" };
 
 export default async function OperationsOverviewPage() {
-  const result = await safely(getOperationsOverview);
+  const result = await safely(async () => {
+    const db = getDb();
+    const [overview, finance, attention, pricing, ai] = await Promise.all([
+      getOperationsOverview(),
+      getOperationsFinance(),
+      getSessionsNeedingAttention(db, new Date()),
+      getPricingAdminView(db),
+      getAiUsage(db),
+    ]);
+    return { ...overview, finance, attention, pricing, ai };
+  });
   if (!result.ok) return <ErrorState message={result.error.message} />;
-  const { counts, unassigned, recent, activeTrainers } = result.data;
+  const { counts, unassigned, recent, activeTrainers, finance, attention, pricing, ai } = result.data;
   const total = Object.values(counts).reduce<number>((s, n) => s + (n ?? 0), 0);
+  const needsAttention = attention.overdue.length + attention.notStarted.length;
+  const packageFigures: Array<[string, number]> = [
+    ["Active", finance.packages.active],
+    ["Sessions left", finance.packages.sessionsRemaining],
+    ["Used up / expired", finance.packages.exhausted + finance.packages.expired],
+    ["Awaiting payment", finance.packages.pendingPayment],
+  ];
+  const paymentLabel = { SUCCEEDED: "Succeeded", FAILED: "Declined", REFUNDED: "Refunded", PENDING: "Pending" } as const;
+  const paymentTone = {
+    SUCCEEDED: "text-success",
+    FAILED: "text-danger",
+    REFUNDED: "text-ink-muted",
+    PENDING: "text-ink-muted",
+  } as const;
 
   return (
     <div className="grid gap-8">
       <PageHeader
         title="Overview"
-        description="Counts are read live from the database (currently holding seeded demo data)."
+        description="Every figure is read live from persisted records (seeded demo data plus anything booked in the app). All money is simulated."
         className="pb-0"
       />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -30,7 +61,193 @@ export default async function OperationsOverviewPage() {
         <Metric label="Confirmed" value={counts.CONFIRMED ?? 0} />
         <Metric label="In progress" value={counts.IN_PROGRESS ?? 0} />
         <Metric label="Completed" value={counts.COMPLETED ?? 0} />
-        <Metric label="Cancelled / failed" value={(counts.CANCELLED ?? 0) + (counts.FAILED ?? 0)} />
+        <Metric
+          label="Cancelled / failed"
+          value={(counts.CANCELLED ?? 0) + (counts.FAILED ?? 0)}
+          foot={`${counts.FAILED ?? 0} with a declined payment`}
+        />
+      </div>
+
+      <section aria-labelledby="money-h" className="grid gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <h2 id="money-h" className="text-heading-md font-semibold">
+            Payments and commission <span className="font-normal text-ink-muted">(simulated)</span>
+          </h2>
+          <p className="text-body-sm text-ink-muted">Sums of persisted payment records. No real money moved.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Metric
+            label="Successful payments"
+            value={formatINR(finance.succeeded.total)}
+            foot={`${finance.payments.SUCCEEDED?.count ?? 0} payments · ${finance.succeeded.packageCount} for packages`}
+          />
+          <Metric
+            label="Society commission"
+            value={formatINR(finance.succeeded.commission)}
+            foot="From successful payments; package sessions count once, at purchase"
+          />
+          <Metric
+            label="Net after commission"
+            value={formatINR(finance.succeeded.net)}
+            foot="Session and package prices, excluding commission"
+          />
+          <Metric
+            label="Declined / refunded"
+            value={`${finance.payments.FAILED?.count ?? 0} / ${finance.payments.REFUNDED?.count ?? 0}`}
+            foot={`${formatINR(finance.payments.REFUNDED?.amount ?? "0.00")} refunded on cancellations`}
+          />
+        </div>
+      </section>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <div>
+              <CardTitle>Packages</CardTitle>
+              <p className="text-body-sm text-ink-muted">Customer-owned packages, from package records.</p>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+              {packageFigures.map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-body-sm text-ink-muted">{label}</dt>
+                  <dd className="text-heading-lg font-semibold tabular">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div>
+              <CardTitle>AI workout recommendations</CardTitle>
+              <p className="text-body-sm text-ink-muted">
+                Counts from the recommendation request log. Fallbacks are the deterministic templates.
+              </p>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <dl className="grid grid-cols-3 gap-x-6 gap-y-3">
+              <div>
+                <dt className="text-body-sm text-ink-muted">AI-generated</dt>
+                <dd className="text-heading-lg font-semibold tabular">{ai.aiSuccess}</dd>
+              </div>
+              <div>
+                <dt className="text-body-sm text-ink-muted">Rule-based fallback</dt>
+                <dd className="text-heading-lg font-semibold tabular">{ai.fallback}</dd>
+              </div>
+              <div>
+                <dt className="text-body-sm text-ink-muted">AI attempts failed</dt>
+                <dd className="text-heading-lg font-semibold tabular">{ai.aiFailed}</dd>
+              </div>
+            </dl>
+            {ai.recentFailures.length > 0 ? (
+              <ul className="mt-3 grid gap-1 border-t border-hairline pt-3">
+                {ai.recentFailures.map((f, i) => (
+                  <li key={i} className="text-body-sm text-ink-muted">
+                    {formatSlot(f.at)} · {f.source === "AI" ? "AI" : "fallback"} · {f.kind}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-3 border-t border-hairline pt-3 text-body-sm text-ink-muted">
+                No failures logged. Every generation attempt is recorded, so zero here means none failed.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <div>
+              <CardTitle>Pricing now</CardTitle>
+              <p className="text-body-sm text-ink-muted">Active rules used to price new bookings.</p>
+            </div>
+            <Link
+              href="/operations/pricing"
+              className="inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline"
+            >
+              Edit <ArrowRight className="size-4" aria-hidden />
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <dl className="grid grid-cols-[1fr_auto] gap-y-2">
+              {[pricing.standard, pricing.peak].map((r) =>
+                r ? (
+                  <div key={r.id} className="contents">
+                    <dt className="text-ink-muted">
+                      {r.kind === "PEAK" ? "Peak" : "Standard"}
+                      <span className="block text-body-sm text-ink-subtle">
+                        {formatINR(r.sessionPrice)} + {Number(r.commissionPercent)}% commission
+                      </span>
+                    </dt>
+                    <dd className="text-right font-semibold tabular">
+                      {formatINR(calculatePriceBreakdown(r).totalAmount)}
+                    </dd>
+                  </div>
+                ) : null,
+              )}
+            </dl>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div>
+              <CardTitle>Sessions needing attention</CardTitle>
+              <p className="text-body-sm text-ink-muted">
+                In progress past their 60-minute end but not yet closed, or confirmed and never started. Warnings and
+                completions are applied when an affected page is opened, by the cron endpoint, or with this button.
+              </p>
+            </div>
+            <ReconcileButton />
+          </CardHeader>
+          <CardContent className="px-0 pb-2">
+            {needsAttention === 0 ? (
+              <div className="px-5 pb-3">
+                <EmptyState title="Nothing overdue" body="Every in-progress session is within its 60 minutes." />
+              </div>
+            ) : (
+              <ul className="divide-y divide-hairline">
+                {attention.overdue.map((b) => (
+                  <li key={b.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold">
+                        <span className="tabular">{b.reference}</span> · {b.customer.user.name} with{" "}
+                        {b.trainer?.user.name ?? "—"}
+                      </p>
+                      <p className="text-body-sm text-ink-muted">
+                        Should have ended at {b.sessionRecord ? formatTime(b.sessionRecord.endsAt) : "—"}; awaiting
+                        reconciliation
+                      </p>
+                    </div>
+                    <StatusBadge status={b.status} />
+                  </li>
+                ))}
+                {attention.notStarted.map((b) => (
+                  <li key={b.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold">
+                        <span className="tabular">{b.reference}</span> · {b.customer.user.name} with{" "}
+                        {b.trainer?.user.name ?? "—"}
+                      </p>
+                      <p className="text-body-sm text-ink-muted">
+                        Scheduled {formatSlot(b.startAt)}; the start window closed without a start
+                      </p>
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 rounded-sm bg-warning-soft px-2 py-1 text-xs font-semibold text-warning">
+                      <TriangleAlert className="size-3.5" aria-hidden /> Not started
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -66,6 +283,37 @@ export default async function OperationsOverviewPage() {
               <div className="px-5 pb-3">
                 <EmptyState title="Every booking has a trainer" />
               </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent payments</CardTitle>
+          </CardHeader>
+          <CardContent className="px-0 pb-2">
+            {finance.recent.length === 0 ? (
+              <p className="px-5 pb-3 text-ink-muted">No payments yet.</p>
+            ) : (
+              <ul className="divide-y divide-hairline">
+                {finance.recent.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold">
+                        {p.what} · {p.customer}
+                      </p>
+                      <p className="text-body-sm text-ink-muted">
+                        {formatSlot(p.createdAt)}
+                        {p.commission ? ` · ${formatINR(p.commission)} commission` : ""}
+                      </p>
+                    </div>
+                    <span className="text-right">
+                      <span className="block font-semibold tabular">{formatINR(p.amount)}</span>
+                      <span className={`text-xs font-semibold ${paymentTone[p.status]}`}>{paymentLabel[p.status]}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
             )}
           </CardContent>
         </Card>

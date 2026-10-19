@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState, PhaseNote } from "@/components/shared/states";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { coverageSummary } from "@/lib/payments/coverage";
 import { formatINR } from "@/lib/pricing";
 import { safely } from "@/lib/utils/errors";
 import { formatSlot } from "@/lib/utils/format";
@@ -42,6 +43,9 @@ export default async function OperationsBookingsPage() {
               <th scope="col" className="px-4 py-3">
                 Status
               </th>
+              <th scope="col" className="px-4 py-3">
+                Paid with
+              </th>
               <th scope="col" className="px-4 py-3 text-right">
                 Total
               </th>
@@ -66,6 +70,7 @@ export default async function OperationsBookingsPage() {
                 <td className="px-4 py-3">
                   <StatusBadge status={b.status} />
                 </td>
+                <td className="px-4 py-3 text-body-sm">{coverageSummary(b).label}</td>
                 <td className="px-4 py-3 text-right font-semibold tabular">{formatINR(b.totalAmount)}</td>
               </tr>
             ))}
@@ -90,6 +95,8 @@ export default async function OperationsBookingsPage() {
               <dd>
                 {b.trainer?.user.name ?? <span className="font-semibold text-warning">Unassigned</span>}
               </dd>
+              <dt className="text-ink-muted">Paid with</dt>
+              <dd>{coverageSummary(b).label}</dd>
               <dt className="text-ink-muted">Total</dt>
               <dd className="font-semibold tabular">{formatINR(b.totalAmount)}</dd>
             </dl>
@@ -98,7 +105,7 @@ export default async function OperationsBookingsPage() {
       </ul>
 
       <div className="mt-6">
-        <PhaseNote phase={2}>Filters, booking detail drawer and manual assignment.</PhaseNote>
+        <PhaseNote>Filters, a booking detail drawer and manual reassignment.</PhaseNote>
       </div>
     </div>
   );

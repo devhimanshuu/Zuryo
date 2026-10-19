@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { findWindowOverlaps } from "@/lib/pricing/peak";
 import { pricingKindSchema } from "./enums";
 
 /** "399", "399.0", "399.00" — at most two decimals, no sign, no exponent. */
@@ -50,3 +51,45 @@ export const pricingRuleInputSchema = z
   });
 
 export type PricingRuleInput = z.infer<typeof pricingRuleInputSchema>;
+
+const ruleId = z.string().trim().min(1).max(40);
+
+/**
+ * What operations submit from the pricing editor: the standard rule, the peak rule with its windows,
+ * and the ids of the rules they were editing. The ids make saving optimistic: if someone else saved
+ * in the meantime the server refuses instead of silently overwriting their change.
+ */
+export const pricingConfigInputSchema = z
+  .object({
+    standard: z.object({ sessionPrice: inrAmountSchema, commissionPercent: percentSchema }).strict(),
+    peak: z
+      .object({
+        sessionPrice: inrAmountSchema,
+        commissionPercent: percentSchema,
+        windows: z
+          .array(peakWindowSchema)
+          .min(1, "Add at least one peak window")
+          .max(8, "Use at most 8 peak windows"),
+      })
+      .strict(),
+    basedOn: z.object({ standardRuleId: ruleId, peakRuleId: ruleId.nullable() }).strict(),
+  })
+  .strict()
+  .superRefine((cfg, ctx) => {
+    if (Number(cfg.peak.sessionPrice) < Number(cfg.standard.sessionPrice)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["peak", "sessionPrice"],
+        message: "The peak price can't be lower than the standard price",
+      });
+    }
+    for (const [a, b] of findWindowOverlaps(cfg.peak.windows)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["peak", "windows", b, "startMinute"],
+        message: `Overlaps "${cfg.peak.windows[a]?.label}" on the same day, so the rule would be ambiguous`,
+      });
+    }
+  });
+
+export type PricingConfigInput = z.infer<typeof pricingConfigInputSchema>;

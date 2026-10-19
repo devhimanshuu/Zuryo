@@ -15,6 +15,21 @@ export function localWeekdayAndMinute(at: Date, timeZone: string): { weekday: nu
   return { weekday: WEEKDAY[get("weekday")] ?? 0, minute: Number(get("hour")) * 60 + Number(get("minute")) };
 }
 
+/**
+ * Pairs of windows that cover the same minute of the same weekday. Overlaps make a configuration
+ * ambiguous (which label applies?) and are rejected when operations save pricing.
+ */
+export function findWindowOverlaps(windows: PeakWindowLike[]): Array<[number, number]> {
+  const pairs: Array<[number, number]> = [];
+  windows.forEach((a, i) => {
+    windows.slice(i + 1).forEach((b, k) => {
+      const sameDay = a.daysOfWeek.some((d) => b.daysOfWeek.includes(d));
+      if (sameDay && a.startMinute < b.endMinute && b.startMinute < a.endMinute) pairs.push([i, i + 1 + k]);
+    });
+  });
+  return pairs;
+}
+
 /** A session is peak when its start time falls inside any peak window (start inclusive, end exclusive). */
 export function isPeakStart(startAt: Date, windows: PeakWindowLike[], timeZone: string): boolean {
   const { weekday, minute } = localWeekdayAndMinute(startAt, timeZone);
