@@ -12,7 +12,12 @@ const serverEnvSchema = z.object({
     .url("DATABASE_URL must be a postgres:// or postgresql:// URL.")
     .refine((v) => /^postgres(ql)?:\/\//.test(v), "DATABASE_URL must start with postgresql://"),
   DIRECT_URL: z.string().url().optional(),
+  /** Bearer token for /api/cron/session-lifecycle. Unset = the endpoint is disabled. */
+  CRON_SECRET: z.string().min(16, "CRON_SECRET must be at least 16 characters").optional(),
+  /** Anthropic API key for AI workout recommendations. Unset = the deterministic fallback is used. */
   ANTHROPIC_API_KEY: z.string().optional(),
+  /** Model id for recommendations, e.g. claude-3-5-haiku-latest. */
+  ANTHROPIC_MODEL: z.string().min(1).default("claude-3-5-haiku-latest"),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
