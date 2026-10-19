@@ -44,6 +44,8 @@ enum FitnessGoal {
   ENDURANCE
   POSTURE
   GENERAL_FITNESS
+  CONSISTENCY // "develop a consistent workout routine"
+  BALANCE // "improve balance and movement control"
 }
 
 enum WorkoutPreference {
@@ -68,12 +70,12 @@ enum BookingMode {
 }
 
 enum BookingStatus {
-  PENDING // legacy/unassigned: created without a trainer (the Phase 2 engine never creates these)
-  CONFIRMED // trainer assigned and slot reserved (payment collection arrives with checkout)
+  PENDING // legacy/unassigned: created without a trainer (the booking engine never creates these)
+  CONFIRMED // trainer assigned, slot reserved, paid (simulated) or covered by a package
   IN_PROGRESS // trainer started the session (SessionRecord.startedAt set)
-  COMPLETED
+  COMPLETED // ended by the trainer or closed at the 60-minute deadline
   CANCELLED
-  FAILED // payment failed or no trainer could be assigned
+  FAILED // simulated payment declined (the slot is not held) or no trainer could be assigned
 }
 
 /// What a session focuses on. Trainers list the categories they coach; bookings ask for one.
@@ -94,7 +96,8 @@ enum PackageStatus {
   ACTIVE
   EXHAUSTED
   EXPIRED
-  CANCELLED
+  CANCELLED // checkout abandoned or discarded before payment
+  PENDING_PAYMENT // checkout created, no successful payment yet; never redeemable
 }
 
 enum PackageEntryReason {
@@ -121,6 +124,71 @@ enum NotificationType {
   SESSION_STARTING
   SESSION_WARNING
   SESSION_COMPLETED
+  SESSION_STARTED
+  PAYMENT_SUCCEEDED
+  PAYMENT_FAILED
+  PACKAGE_PURCHASED
+  PACKAGE_SESSION_REDEEMED
+  PACKAGE_SESSION_RESTORED
+}
+
+/// How a session reached COMPLETED: ended by the trainer, or closed at its 60-minute deadline by the
+/// server's lifecycle reconciliation.
+enum SessionCompletionSource {
+  TRAINER
+  DEADLINE
+}
+
+// ─── Phase 4: fitness profiles & recommendations ────────────────────────
+
+enum WorkoutIntensity {
+  LOW
+  MODERATE
+  HIGH
+}
+
+enum WorkoutEnvironment {
+  HOME
+  OUTDOOR
+}
+
+enum EquipmentOption {
+  NONE
+  MAT
+  DUMBBELLS
+  RESISTANCE_BAND
+  KETTLEBELL
+  SKIPPING_ROPE
+  STATIONARY_BIKE
+}
+
+/// Tracking state for one of the customer's fitness goals. The goal list itself stays in
+/// CustomerProfile.fitnessGoals; these rows add status, target and history per goal.
+enum FitnessGoalStatus {
+  ACTIVE
+  COMPLETED
+}
+
+enum RecommendationSource {
+  AI
+  RULE_BASED
+}
+
+enum RecommendationStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum RecommendationFeedback {
+  USEFUL
+  NOT_USEFUL
+}
+
+/// One row per recommendation generation attempt, whatever the outcome, so operations sees honest
+/// usage figures (successes, fallbacks, failures) without logging profile content.
+enum AiRequestOutcome {
+  SUCCESS
+  FAILED
 }
 
 // ─── Identity ──────────────────────────────────────────────────────────
@@ -132,6 +200,8 @@ model User {
   phone     String?
   role      Role
   status    UserStatus @default(ACTIVE)
+  /// bcrypt hash for sign-in. Null only for rows that predate authentication.
+  passwordHash String?
   createdAt DateTime   @default(now()) @db.Timestamptz(3)
   updatedAt DateTime   @updatedAt @db.Timestamptz(3)
 
@@ -139,6 +209,7 @@ model User {
   trainerProfile    TrainerProfile?
   notifications     Notification[]
   cancelledBookings Booking[]        @relation("BookingCancelledBy")
+  pricingRules      PricingRule[]
 
   @@index([role, status])
 }
@@ -177,29 +248,44 @@ model CustomerProfile {
   workoutPreferences WorkoutPreference[]
   /// Set when the customer finishes the assessment; null means "not yet assessed".
   assessedAt         DateTime?           @db.Timestamptz(3)
+  // Phase 4: preference detail the recommendation engine reads. All optional, all voluntary.
+  intensity          WorkoutIntensity?
+  equipment          EquipmentOption[]   @default([])
+  environment        WorkoutEnvironment?
+  /// Exercises or activities the customer wants to avoid (free text, capped in validation).
+  avoidExercises     String?
+  /// Voluntary accessibility / training accommodations.
+  accommodations     String?
+  /// Voluntary movement limitations relevant to exercise selection.
+  movementLimitations String?
+  /// Optional free-text notes about what the customer is working towards.
+  goalDetails        String?
   createdAt          DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
 
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  serviceZone ServiceZone @relation(fields: [serviceZoneId], references: [id], onDelete: Restrict)
-  bookings    Booking[]
-  packages    Package[]
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serviceZone     ServiceZone           @relation(fields: [serviceZoneId], references: [id], onDelete: Restrict)
+  bookings        Booking[]
+  packages        Package[]
+  trackedGoals    FitnessGoalTracking[]
+  recommendations WorkoutRecommendation[]
+  aiRequestLogs   AiRequestLog[]
 
   @@index([serviceZoneId])
 }
 
 model TrainerProfile {
-  userId          String   @id
-  serviceZoneId   String
+  userId            String            @id
+  serviceZoneId     String
   bio               String?
   specializations   String[]
   /// Categories the matcher may assign this trainer to. The first entry is their primary focus.
   workoutCategories WorkoutCategory[] @default([])
   experienceYears   Int?
-  photoUrl        String?
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+  photoUrl          String?
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime          @updatedAt @db.Timestamptz(3)
 
   user              User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   serviceZone       ServiceZone           @relation(fields: [serviceZoneId], references: [id], onDelete: Restrict)
@@ -243,9 +329,12 @@ model PricingRule {
   currency          String      @default("INR")
   isActive          Boolean     @default(true)
   effectiveFrom     DateTime    @default(now()) @db.Timestamptz(3)
+  /// Operations user who saved this version (null for seeded rules).
+  createdById       String?
   createdAt         DateTime    @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime    @updatedAt @db.Timestamptz(3)
 
+  createdBy   User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
   peakWindows PeakWindow[]
   bookings    Booking[]
 
@@ -272,18 +361,18 @@ model PeakWindow {
 // ─── Bookings ──────────────────────────────────────────────────────────
 
 model Booking {
-  id                 String        @id @default(cuid())
+  id                 String           @id @default(cuid())
   /// Human-friendly reference shown to customers, e.g. ZY-24A7Q.
-  reference          String        @unique
+  reference          String           @unique
   customerId         String
   trainerId          String?
   preferredTrainerId String?
   serviceZoneId      String
   packageId          String?
   mode               BookingMode
-  status             BookingStatus @default(PENDING)
-  startAt            DateTime      @db.Timestamptz(3)
-  endAt              DateTime      @db.Timestamptz(3)
+  status             BookingStatus    @default(PENDING)
+  startAt            DateTime         @db.Timestamptz(3)
+  endAt              DateTime         @db.Timestamptz(3)
   /// Required for every booking the engine creates; nullable only for rows that predate Phase 2.
   workoutCategory    WorkoutCategory?
   /// Optional note from the customer to the trainer (max 500 chars, validated in the app).
@@ -329,24 +418,59 @@ model Booking {
 
 // ─── Packages ──────────────────────────────────────────────────────────
 
-/// A bundle of sessions. usedSessions is a cached counter kept in step with the ledger inside the
-/// same transaction; the ledger is the audit trail and the duplicate-request guard.
-model Package {
-  id            String        @id @default(cuid())
-  customerId    String
-  name          String
-  totalSessions Int
-  usedSessions  Int           @default(0)
-  pricePaid     Decimal       @db.Decimal(10, 2)
-  status        PackageStatus @default(ACTIVE)
-  purchasedAt   DateTime      @default(now()) @db.Timestamptz(3)
-  expiresAt     DateTime?     @db.Timestamptz(3)
-  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime      @updatedAt @db.Timestamptz(3)
+/// A package customers can buy (the catalogue). Editing a plan never changes packages already
+/// bought: each Package keeps its own price and session-count snapshot.
+model PackagePlan {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  name         String
+  description  String?
+  sessionCount Int
+  /// Package price before society commission, in INR.
+  price        Decimal  @db.Decimal(10, 2)
+  /// Days the package stays usable after a successful payment.
+  validityDays Int
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
 
-  customer CustomerProfile      @relation(fields: [customerId], references: [userId], onDelete: Restrict)
-  bookings Booking[]
-  entries  PackageLedgerEntry[]
+  packages Package[]
+
+  @@index([isActive, sortOrder])
+}
+
+/// A bundle of sessions a customer owns (or is checking out). usedSessions is a cached counter kept
+/// in step with the append-only ledger inside the same transaction; the ledger is the audit trail and
+/// the duplicate-request guard. Only ACTIVE packages can be redeemed.
+model Package {
+  id                String        @id @default(cuid())
+  customerId        String
+  planId            String?
+  name              String
+  totalSessions     Int
+  usedSessions      Int           @default(0)
+  /// Total the customer pays: basePrice + commissionAmount (snapshot at checkout).
+  pricePaid         Decimal       @db.Decimal(10, 2)
+  basePrice         Decimal?      @db.Decimal(10, 2)
+  commissionPercent Decimal?      @db.Decimal(5, 2)
+  commissionAmount  Decimal?      @db.Decimal(10, 2)
+  validityDays      Int?
+  status            PackageStatus @default(ACTIVE)
+  /// For PENDING_PAYMENT rows this is when checkout started; set to the payment time on activation.
+  purchasedAt       DateTime      @default(now()) @db.Timestamptz(3)
+  expiresAt         DateTime?     @db.Timestamptz(3)
+  /// Client-generated key so a retried "start checkout" returns the same pending package.
+  checkoutKey       String?       @unique
+  createdAt         DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime      @updatedAt @db.Timestamptz(3)
+
+  customer      CustomerProfile      @relation(fields: [customerId], references: [userId], onDelete: Restrict)
+  plan          PackagePlan?         @relation(fields: [planId], references: [id], onDelete: Restrict)
+  bookings      Booking[]
+  entries       PackageLedgerEntry[]
+  payments      Payment[]
+  notifications Notification[]
 
   @@index([customerId, status])
 }
@@ -372,23 +496,37 @@ model PackageLedgerEntry {
 
 // ─── Payments ──────────────────────────────────────────────────────────
 
-/// Simulated payments only. No card data is ever stored or collected.
+/// Simulated payments only. No card data is ever stored or collected. A payment is for exactly one
+/// booking or one package (CHECK constraint), and at most one payment per booking or package can be
+/// SUCCEEDED/REFUNDED (partial unique indexes), so a retried checkout can't charge twice.
 model Payment {
   id                String          @id @default(cuid())
-  bookingId         String
+  bookingId         String?
+  packageId         String?
+  /// amount = baseAmount + commissionAmount (the customer's total).
   amount            Decimal         @db.Decimal(10, 2)
+  baseAmount        Decimal?        @db.Decimal(10, 2)
+  commissionAmount  Decimal?        @db.Decimal(10, 2)
   currency          String          @default("INR")
   status            PaymentStatus   @default(PENDING)
   provider          PaymentProvider @default(SIMULATED)
   providerReference String?         @unique
   idempotencyKey    String          @unique
   failureReason     String?
+  /// When the simulated provider returned SUCCEEDED or FAILED.
+  completedAt       DateTime?       @db.Timestamptz(3)
+  /// Simulated refund (a cancelled pay-per-session booking). No real money moves.
+  refundedAt        DateTime?       @db.Timestamptz(3)
   createdAt         DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime        @updatedAt @db.Timestamptz(3)
 
-  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  booking       Booking?       @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  package       Package?       @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  notifications Notification[]
 
   @@index([bookingId, status])
+  @@index([packageId, status])
+  @@index([status, createdAt])
 }
 
 // ─── Sessions ──────────────────────────────────────────────────────────
@@ -396,23 +534,101 @@ model Payment {
 /// Server-authoritative session timing. startedAt/endsAt are written by the server when the trainer
 /// starts; clients derive the countdown from these, never from a local counter.
 model SessionRecord {
-  id                   String    @id @default(cuid())
-  bookingId            String    @unique
-  startedAt            DateTime  @db.Timestamptz(3)
-  endsAt               DateTime  @db.Timestamptz(3)
-  warningSentAt        DateTime? @db.Timestamptz(3)
-  completedAt          DateTime? @db.Timestamptz(3)
+  id                   String                   @id @default(cuid())
+  bookingId            String                   @unique
+  startedAt            DateTime                 @db.Timestamptz(3)
+  /// startedAt + plannedMinutes, written once at start. The deadline never moves.
+  endsAt               DateTime                 @db.Timestamptz(3)
+  plannedMinutes       Int                      @default(60)
+  warningSentAt        DateTime?                @db.Timestamptz(3)
+  completedAt          DateTime?                @db.Timestamptz(3)
+  completionSource     SessionCompletionSource?
   /// [{ "name": "Goblet squat", "sets": 3, "reps": 12 }, { "name": "Brisk walk", "durationMin": 10 }]
-  activities           Json      @default("[]")
+  activities           Json                     @default("[]")
   trainerNotes         String?
   suggestedNextWorkout String?
   customerFeedback     String?
-  createdAt            DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt            DateTime  @updatedAt @db.Timestamptz(3)
+  createdAt            DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                 @updatedAt @db.Timestamptz(3)
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
 
   @@index([completedAt])
+}
+
+// ─── Fitness goals, recommendations & AI usage ─────────────────────────
+
+/// Tracking state for one of a customer's fitness goals (the selected goal list lives on
+/// CustomerProfile.fitnessGoals; the profile form keeps both in step in one transaction).
+/// Named *Tracking* because the Postgres enum is already called "FitnessGoal".
+model FitnessGoalTracking {
+  id         String           @id @default(cuid())
+  customerId String
+  goal       FitnessGoal
+  status     FitnessGoalStatus @default(ACTIVE)
+  /// Optional free-text target, e.g. "Train three times a week".
+  target     String?
+  targetDate DateTime?        @db.Timestamptz(3)
+  createdAt  DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime         @updatedAt @db.Timestamptz(3)
+
+  customer CustomerProfile @relation(fields: [customerId], references: [userId], onDelete: Cascade)
+
+  @@unique([customerId, goal])
+  @@index([customerId, status])
+}
+
+/// One generated workout recommendation, whatever produced it. The full structured workout is in
+/// `payload` (validated JSON); the denormalised columns let lists render without parsing it.
+/// goalSnapshot / preferenceSnapshot record what the recommendation was based on, so history stays
+/// explainable after the profile changes.
+model WorkoutRecommendation {
+  id                String                 @id @default(cuid())
+  customerId        String
+  source            RecommendationSource
+  status            RecommendationStatus   @default(ACTIVE)
+  goal              FitnessGoal
+  category          WorkoutCategory
+  title             String
+  /// Grounded explanation, e.g. "Suggested because you selected beginner strength and prefer equipment-free workouts."
+  explanation       String
+  durationMinutes   Int
+  intensity         WorkoutIntensity
+  goalSnapshot      FitnessGoal[]
+  preferenceSnapshot Json
+  /// Validated structured output: { summary, warmup, cooldown, rest, safety, adaptations, nextAction, equipment, exercises[] }.
+  payload           Json
+  /// Provider model id for AI-generated rows; null for rule-based rows.
+  modelId           String?
+  feedback          RecommendationFeedback?
+  feedbackNote      String?
+  feedbackAt        DateTime?              @db.Timestamptz(3)
+  createdAt         DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime               @updatedAt @db.Timestamptz(3)
+
+  customer CustomerProfile @relation(fields: [customerId], references: [userId], onDelete: Cascade)
+
+  @@index([customerId, createdAt(sort: Desc)])
+  @@index([source, createdAt])
+}
+
+/// Append-only log of recommendation generation attempts. Success + failure counts and fallback
+/// usage on the operations dashboard come from here; no profile content is stored.
+model AiRequestLog {
+  id         String             @id @default(cuid())
+  customerId String
+  /// What produced the recommendation this attempt ended with (AI or the rule-based fallback).
+  source     RecommendationSource
+  outcome    AiRequestOutcome
+  modelId    String?
+  /// Short failure kind, e.g. TIMEOUT / INVALID_OUTPUT / PROVIDER_ERROR / UNCONFIGURED. No secrets or stack traces.
+  errorKind  String?
+  createdAt  DateTime           @default(now()) @db.Timestamptz(3)
+
+  customer CustomerProfile @relation(fields: [customerId], references: [userId], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([customerId, createdAt])
 }
 
 // ─── Notifications ─────────────────────────────────────────────────────
@@ -425,11 +641,18 @@ model Notification {
   type        NotificationType
   title       String
   message     String
+  packageId   String?
+  paymentId   String?
+  /// Set for event-driven notifications (e.g. "session-warning:<bookingId>:<recipient>") so a
+  /// retried or concurrent event can't notify twice.
+  dedupeKey   String?          @unique
   readAt      DateTime?        @db.Timestamptz(3)
   createdAt   DateTime         @default(now()) @db.Timestamptz(3)
 
   recipient User     @relation(fields: [recipientId], references: [id], onDelete: Cascade)
   booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  package   Package? @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  payment   Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
 
   @@index([recipientId, readAt, createdAt(sort: Desc)])
 }
