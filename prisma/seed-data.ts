@@ -7,6 +7,7 @@
  * current day in IST so the demo always has "upcoming" and "past" sessions.
  */
 import { calculatePriceBreakdown, isPeakStart, type PeakWindowLike } from "../src/lib/pricing";
+import { buildRuleBasedRecommendation, ruleBasedExplanation } from "../src/lib/fitness/templates";
 import { istMidnight } from "../src/lib/utils/time";
 
 export { istMidnight };
@@ -213,6 +214,101 @@ export const PRICING_RULES = [
     kind: "PEAK",
     sessionPrice: "499.00",
     commissionPercent: "10.00",
+  },
+] as const;
+
+/**
+ * The package catalogue (demo configuration, editable in the database). Prices are before the
+ * society commission, which is added at checkout from the active standard rule.
+ */
+export const PACKAGE_PLANS = [
+  {
+    id: "seed_plan_single",
+    slug: "single-session",
+    name: "Single Session",
+    description: "One session to use whenever suits you.",
+    sessionCount: 1,
+    price: "399.00",
+    validityDays: 30,
+    sortOrder: 1,
+  },
+  {
+    id: "seed_plan_starter",
+    slug: "starter-pack",
+    name: "Starter Pack",
+    description: "Five sessions to build a routine.",
+    sessionCount: 5,
+    price: "1895.00",
+    validityDays: 60,
+    sortOrder: 2,
+  },
+  {
+    id: "seed_plan_fitness",
+    slug: "fitness-pack",
+    name: "Fitness Pack",
+    description: "Ten sessions for a steady two-to-three-a-week habit.",
+    sessionCount: 10,
+    price: "3590.00",
+    validityDays: 90,
+    sortOrder: 3,
+  },
+] as const;
+
+/** Phase 4: voluntary preference detail per customer, shown in the fitness profile. */
+export const PROFILE_DETAILS: Record<string, {
+  intensity: "LOW" | "MODERATE" | "HIGH" | null;
+  equipment: Array<"NONE" | "MAT" | "DUMBBELLS" | "RESISTANCE_BAND">;
+  environment: "HOME" | "OUTDOOR" | null;
+  avoidExercises: string | null;
+  accommodations: string | null;
+  movementLimitations: string | null;
+  goalDetails: string | null;
+}> = {
+  seed_user_priya: {
+    intensity: "MODERATE",
+    equipment: ["MAT", "DUMBBELLS"],
+    environment: "HOME",
+    avoidExercises: "Barbell overhead presses",
+    accommodations: null,
+    movementLimitations: "Tight shoulders after long desk days",
+    goalDetails: "Train three times a week and keep the workouts under an hour.",
+  },
+  seed_user_farhan: {
+    intensity: "HIGH",
+    equipment: ["NONE"],
+    environment: "OUTDOOR",
+    avoidExercises: null,
+    accommodations: null,
+    movementLimitations: null,
+    goalDetails: null,
+  },
+};
+
+/** Phase 4: per-goal tracking rows (targets, status) for the seeded customers. */
+export const FITNESS_GOAL_TRACKING = [
+  {
+    id: "seed_goal_priya_strength",
+    customerId: "seed_user_priya",
+    goal: "STRENGTH",
+    status: "ACTIVE",
+    target: "Three sessions a week",
+    targetDate: null,
+  },
+  {
+    id: "seed_goal_priya_weight",
+    customerId: "seed_user_priya",
+    goal: "WEIGHT_LOSS",
+    status: "ACTIVE",
+    target: "Stick with the plan for 8 weeks",
+    targetDate: null,
+  },
+  {
+    id: "seed_goal_farhan_endurance",
+    customerId: "seed_user_farhan",
+    goal: "ENDURANCE",
+    status: "ACTIVE",
+    target: null,
+    targetDate: null,
   },
 ] as const;
 
@@ -491,39 +587,58 @@ export function buildSeedPlan(anchor: Date) {
         : []),
     ]);
 
+  const standardCommission = PRICING_RULES[0].commissionPercent;
   const packages = [
-    {
-      id: "seed_pkg_priya",
-      customerId: "seed_user_priya",
-      name: "10-session pack",
-      totalSessions: 10,
-      pricePaid: "3990.00",
-      purchasedAt: at(-14, 9),
-    },
-    {
-      id: "seed_pkg_farhan",
-      customerId: "seed_user_farhan",
-      name: "5-session pack",
-      totalSessions: 5,
-      pricePaid: "1995.00",
-      purchasedAt: at(-5, 9),
-    },
-  ].map((p) => ({
-    ...p,
-    usedSessions: -ledger.filter((e) => e.packageId === p.id).reduce((sum, e) => sum + e.delta, 0),
-  }));
+    { id: "seed_pkg_priya", customerId: "seed_user_priya", plan: PACKAGE_PLANS[2], purchasedAt: at(-14, 9) },
+    { id: "seed_pkg_farhan", customerId: "seed_user_farhan", plan: PACKAGE_PLANS[1], purchasedAt: at(-5, 9) },
+  ].map(({ plan, ...p }) => {
+    const price = calculatePriceBreakdown({ sessionPrice: plan.price, commissionPercent: standardCommission });
+    return {
+      ...p,
+      planId: plan.id,
+      name: plan.name,
+      totalSessions: plan.sessionCount,
+      basePrice: price.sessionPrice,
+      commissionPercent: price.commissionPercent,
+      commissionAmount: price.commissionAmount,
+      pricePaid: price.totalAmount,
+      validityDays: plan.validityDays,
+      expiresAt: new Date(p.purchasedAt.getTime() + plan.validityDays * 86_400_000),
+      usedSessions: -ledger.filter((e) => e.packageId === p.id).reduce((sum, e) => sum + e.delta, 0),
+    };
+  });
 
-  const payments = bookings
-    .filter((b) => b.payment)
-    .map((b) => ({
-      id: `seed_pay_${b.id}`,
-      bookingId: b.id,
-      amount: b.totalAmount,
-      status: b.payment!,
-      providerReference: b.payment === "SUCCEEDED" ? `SIM-${b.reference}` : null,
-      idempotencyKey: `seed-${b.id}`,
-      failureReason: b.payment === "FAILED" ? "Simulated decline (demo)" : null,
-    }));
+  const payments = [
+    ...bookings
+      .filter((b) => b.payment)
+      .map((b) => ({
+        id: `seed_pay_${b.id}`,
+        bookingId: b.id as string | null,
+        packageId: null as string | null,
+        amount: b.totalAmount,
+        baseAmount: b.sessionPrice,
+        commissionAmount: b.commissionAmount,
+        status: b.payment!,
+        providerReference: b.payment === "SUCCEEDED" ? `SIM-${b.reference}` : null,
+        idempotencyKey: `seed-${b.id}`,
+        failureReason: b.payment === "FAILED" ? "Simulated decline (demo)" : null,
+        completedAt: at(b.day - 1, 12),
+      })),
+    // Seeded packages were bought with a (simulated) payment too, so financial reports add up.
+    ...packages.map((p) => ({
+      id: `seed_pay_${p.id}`,
+      bookingId: null as string | null,
+      packageId: p.id as string | null,
+      amount: p.pricePaid,
+      baseAmount: p.basePrice,
+      commissionAmount: p.commissionAmount,
+      status: "SUCCEEDED" as const,
+      providerReference: `SIM-${p.id.toUpperCase()}`,
+      idempotencyKey: `seed-${p.id}`,
+      failureReason: null,
+      completedAt: p.purchasedAt,
+    })),
+  ];
 
   const sessions = bookings
     .filter((b) => b.session)
@@ -532,8 +647,10 @@ export function buildSeedPlan(anchor: Date) {
       bookingId: b.id,
       startedAt: new Date(b.startAt.getTime() + 2 * 60_000),
       endsAt: new Date(b.startAt.getTime() + 62 * 60_000),
+      plannedMinutes: 60,
       warningSentAt: new Date(b.startAt.getTime() + 57 * 60_000),
       completedAt: new Date(b.startAt.getTime() + 62 * 60_000),
+      completionSource: "TRAINER" as const,
       activities: b.session!.activities,
       trainerNotes: b.session!.notes,
       suggestedNextWorkout: b.session!.next,
@@ -593,8 +710,61 @@ export function buildSeedPlan(anchor: Date) {
     },
   ];
 
+  // Phase 4: one honest, rule-based recommendation for Priya so the dashboard has history out of
+  // the box. Built with the same deterministic engine the fallback uses, and labelled RULE_BASED.
+  const recommendationContext = {
+    customerName: "Priya Sharma",
+    goal: "STRENGTH" as const,
+    level: "INTERMEDIATE" as const,
+    intensity: "MODERATE",
+    environment: "HOME",
+    equipment: ["MAT", "DUMBBELLS"],
+    workoutPreferences: ["MORNING", "WEIGHTS"],
+    selectedGoals: ["WEIGHT_LOSS", "STRENGTH"] as Array<"WEIGHT_LOSS" | "STRENGTH">,
+    avoidExercises: "Barbell overhead presses",
+    accommodations: null,
+    movementLimitations: "Tight shoulders after long desk days",
+    goalDetails: "Train three times a week and keep the workouts under an hour.",
+    recentSessions: [
+      { category: "STRENGTH" as const, completedAt: at(-9, 8).toISOString() },
+      { category: "STRENGTH" as const, completedAt: at(-6, 11).toISOString() },
+      { category: "CARDIO" as const, completedAt: at(-2, 19).toISOString() },
+    ],
+    categoryCounts: { STRENGTH: 2, CARDIO: 1 },
+    recentFeedback: [],
+  };
+  const priyaPlan = buildRuleBasedRecommendation(recommendationContext);
+  const recommendations = [
+    {
+      id: "seed_rec_priya_strength",
+      customerId: "seed_user_priya",
+      source: "RULE_BASED" as const,
+      status: "ACTIVE" as const,
+      goal: "STRENGTH" as const,
+      category: priyaPlan.category,
+      title: priyaPlan.title,
+      explanation: ruleBasedExplanation(recommendationContext),
+      durationMinutes: priyaPlan.durationMinutes,
+      intensity: priyaPlan.intensity,
+      goalSnapshot: ["WEIGHT_LOSS", "STRENGTH"] as const,
+      preferenceSnapshot: {
+        level: "INTERMEDIATE",
+        intensity: "MODERATE",
+        equipment: ["MAT", "DUMBBELLS"],
+        environment: "HOME",
+        workoutPreferences: ["MORNING", "WEIGHTS"],
+        movementLimitations: "Tight shoulders after long desk days",
+        accommodations: null,
+      },
+      payload: priyaPlan,
+      modelId: null,
+      createdAt: at(-1, 18),
+    },
+  ];
+
   return {
     zones: ZONES,
+    packagePlans: PACKAGE_PLANS,
     customers: CUSTOMERS,
     trainers: TRAINERS,
     operations: OPERATIONS_USER,
@@ -607,6 +777,9 @@ export function buildSeedPlan(anchor: Date) {
     payments,
     sessions,
     notifications,
+    profileDetails: PROFILE_DETAILS,
+    fitnessGoalTracking: FITNESS_GOAL_TRACKING,
+    recommendations,
   };
 }
 

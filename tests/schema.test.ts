@@ -85,6 +85,26 @@ describe("prisma schema", () => {
     expect(migrationSql).toContain('"Booking_range_check"');
   });
 
+  it("guards money, balances and lifecycle events in the database", () => {
+    for (const name of [
+      '"Payment_target_check"',
+      '"Payment_breakdown_check"',
+      '"Payment_refund_check"',
+      '"Payment_one_success_per_booking"',
+      '"Payment_one_success_per_package"',
+      '"Package_breakdown_check"',
+      '"PackageLedgerEntry_reason_delta_check"',
+      '"PackageLedgerEntry_append_only"',
+      '"SessionRecord_duration_check"',
+      '"SessionRecord_completion_check"',
+    ]) {
+      expect(migrationSql, name).toContain(name);
+    }
+    expect(modelBody("Notification")).toMatch(/dedupeKey\s+String\?\s+@unique/);
+    expect(modelBody("Package")).toMatch(/checkoutKey\s+String\?\s+@unique/);
+    expect(modelBody("SessionRecord")).toMatch(/bookingId\s+String\s+@unique/);
+  });
+
   it("prevents overlapping active bookings in the database, not just in application code", () => {
     expect(migrationSql).toMatch(/CREATE EXTENSION IF NOT EXISTS btree_gist/);
     for (const [name, column] of [

@@ -16,18 +16,18 @@ export function MarketingFooter() {
           links={[
             { href: "/how-it-works", label: "How it works" },
             { href: "/#instant-or-scheduled", label: "Instant or scheduled" },
-            { href: "/customer", label: "Customer demo" },
+            { href: "/sign-in", label: "Customer workspace" },
           ]}
         />
         <FooterCol
           title="Partners"
           links={[
             { href: "/#for-trainers", label: "For trainers" },
-            { href: "/trainer", label: "Trainer demo" },
-            { href: "/operations", label: "Operations demo" },
+            { href: "/sign-in", label: "Trainer workspace" },
+            { href: "/sign-in", label: "Operations workspace" },
           ]}
         />
-        <FooterCol title="Account" links={[{ href: "/sign-in", label: "Demo access" }]} />
+        <FooterCol title="Account" links={[{ href: "/sign-in", label: "Sign in" }]} />
       </div>
       <div className="container-page flex flex-wrap justify-between gap-2 border-t border-ink-inverse/15 py-5 text-body-sm text-ink-inverse/70">
         <p>© {new Date().getFullYear()} Zuryo. A product demo with synthetic data.</p>

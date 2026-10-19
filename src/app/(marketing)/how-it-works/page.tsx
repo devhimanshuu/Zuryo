@@ -128,8 +128,8 @@ export default async function HowItWorksPage() {
       <div className="mt-16 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-hairline bg-raised p-6">
         <p className="text-heading-md font-semibold">Ready to try it?</p>
         <Button asChild variant="primary">
-          <Link href="/customer">
-            Open the customer demo <ArrowRight aria-hidden />
+          <Link href="/sign-in">
+            Sign in to open the customer workspace <ArrowRight aria-hidden />
           </Link>
         </Button>
       </div>

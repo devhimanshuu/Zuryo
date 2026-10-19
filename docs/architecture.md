@@ -96,3 +96,24 @@ A session is peak when its **start time**, in the community's local timezone, fa
 5. **Cancel and reschedule** with state checks and a ledger refund (`CANCELLATION_REFUND`, unique per booking).
 6. **UI.** Booking stepper (mode → time → trainer → review → simulated pay → confirmation) using the existing tokens and primitives.
 7. **Tests.** Assignment tie-breaking, concurrent double-booking (two parallel transactions), idempotent retries and refund-once.
+
+## Phase 4: fitness profiles & AI recommendations
+
+**Profile.** `CustomerProfile` gains optional, voluntary preference detail (intensity, equipment, environment, avoid list, accommodations, movement limitations, goal notes). The selected goal list stays on `CustomerProfile.fitnessGoals` (read by matching and the trainer session page); `FitnessGoalTracking` rows add per-goal status/target/target-date and are kept in step with the selection by the profile form in one transaction.
+
+**Recommendations.** `WorkoutRecommendation` stores the full structured workout as validated JSON (`payload`), denormalised listing columns, a goal/preference snapshot for historical explainability, the source (`AI`/`RULE_BASED`), the provider model id for AI rows, and customer feedback. `AiRequestLog` is the append-only attempt log the operations dashboard reads — no profile content is stored there.
+
+**Generation flow.** The customer explicitly generates (never on page load), with a one-per-minute per-customer cooldown enforced from persisted timestamps. The service builds a bounded `RecommendationContext` (goal, level, equipment, preferences, up to 5 recent completed sessions, up to 3 feedback entries — nothing else), asks the provider abstraction (`lib/ai/provider.ts`, Anthropic Messages API with a forced structured-output tool), and validates the answer against `recommendationOutputSchema` before storing. Any provider failure (unconfigured, timeout, HTTP error, invalid output) falls back to deterministic rule-based templates in `lib/fitness/templates.ts`, which are honestly labelled `RULE_BASED` and never presented as AI.
+
+**Booking integration.** A recommendation's "book this" link carries the workout category as a validated query param into the existing booking wizard, which pre-selects it. Booking, matching, pricing and payment logic are untouched.
+
+## Authentication (NextAuth)
+
+Email + password sign-in with NextAuth v5 (Auth.js): a Credentials provider (`src/lib/auth/index.ts`) verifies against the `User` table (bcrypt hash in `User.passwordHash`, seeded as `password123` for every demo account), refuses suspended users and workspace/role mismatches, and issues a signed JWT session cookie (30 days). The user id and role ride in the JWT (`src/lib/auth/types.d.ts` augments the session types).
+
+- `src/middleware.ts` protects `/customer`, `/trainer` and `/operations` by role (the `authorized` callback in `src/lib/auth/auth.config.ts` does the checks, split from the Node-only provider so the edge middleware stays Prisma-free), bounces signed-in users away from `/sign-in`, and preserves `callbackUrl`.
+- `src/server/auth/actor.ts` resolves every server action's and page's acting user from the session; it throws a structured `FORBIDDEN` error when there is no session or the role doesn't match, so direct action calls can't bypass the UI.
+- Credential verification lives in `src/lib/auth/credentials.ts` with the database client injected, which is what lets the integration suite test it directly (12 tests in `tests/integration/auth.test.ts`).
+- The demo persona cookie switcher is gone: switching demo users now means signing out and signing back in with another seeded email.
+
+Known limitation: there is no email verification, password reset or sign-up yet — accounts come from the seed, and the demo database shares one password. Session identity itself is production-grade (signed, httpOnly, SameSite=Lax, CSRF-protected callback); the account provisioning around it is still demo-level.

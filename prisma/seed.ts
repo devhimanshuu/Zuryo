@@ -6,6 +6,7 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, type BookingStatus, type Prisma } from "@prisma/client";
+import { hashSync } from "bcryptjs";
 import { pgPoolConfig } from "../src/lib/db/pool";
 import { buildSeedPlan } from "./seed-data";
 
@@ -21,6 +22,10 @@ if (!process.env.DATABASE_URL) {
 }
 
 const db = new PrismaClient({ adapter: new PrismaPg(pgPoolConfig(process.env.DATABASE_URL)) });
+
+/** The shared demo password. Printed by the seed and shown on the sign-in page; this is demo data. */
+export const DEMO_PASSWORD = "password123";
+const DEMO_PASSWORD_HASH = hashSync(DEMO_PASSWORD, 10);
 
 /** Statuses that hold a slot. Must match the predicate of the overlap constraints in the migrations. */
 const ACTIVE_STATUSES: BookingStatus[] = ["PENDING", "CONFIRMED", "IN_PROGRESS"];
@@ -42,8 +47,9 @@ async function main() {
       }
 
       for (const c of plan.customers) {
-        const user = { name: c.name, email: c.email, role: "CUSTOMER" as const };
+        const user = { name: c.name, email: c.email, role: "CUSTOMER" as const, passwordHash: DEMO_PASSWORD_HASH };
         await tx.user.upsert({ where: { id: c.id }, create: { id: c.id, ...user }, update: user });
+        const details = plan.profileDetails[c.id];
         const profile = {
           serviceZoneId: c.zoneId,
           addressLine: c.addressLine,
@@ -53,6 +59,17 @@ async function main() {
           fitnessLevel: c.level,
           workoutPreferences: c.prefs,
           assessedAt: c.assessed ? new Date("2026-01-01T00:00:00Z") : null,
+          ...(details
+            ? {
+                intensity: details.intensity,
+                equipment: [...details.equipment],
+                environment: details.environment,
+                avoidExercises: details.avoidExercises,
+                accommodations: details.accommodations,
+                movementLimitations: details.movementLimitations,
+                goalDetails: details.goalDetails,
+              }
+            : {}),
         };
         await tx.customerProfile.upsert({
           where: { userId: c.id },
@@ -62,7 +79,7 @@ async function main() {
       }
 
       for (const t of plan.trainers) {
-        const user = { name: t.name, email: t.email, role: "TRAINER" as const };
+        const user = { name: t.name, email: t.email, role: "TRAINER" as const, passwordHash: DEMO_PASSWORD_HASH };
         await tx.user.upsert({ where: { id: t.id }, create: { id: t.id, ...user }, update: user });
         const profile = {
           serviceZoneId: t.zoneId,
@@ -79,7 +96,12 @@ async function main() {
         });
       }
 
-      const ops = { name: plan.operations.name, email: plan.operations.email, role: "OPERATIONS" as const };
+      const ops = {
+        name: plan.operations.name,
+        email: plan.operations.email,
+        role: "OPERATIONS" as const,
+        passwordHash: DEMO_PASSWORD_HASH,
+      };
       await tx.user.upsert({
         where: { id: plan.operations.id },
         create: { id: plan.operations.id, ...ops },
@@ -122,26 +144,51 @@ async function main() {
         });
       }
 
+      for (const pp of plan.packagePlans) {
+        const data = {
+          slug: pp.slug,
+          name: pp.name,
+          description: pp.description,
+          sessionCount: pp.sessionCount,
+          price: pp.price,
+          validityDays: pp.validityDays,
+          sortOrder: pp.sortOrder,
+          isActive: true,
+        };
+        await tx.packagePlan.upsert({ where: { id: pp.id }, create: { id: pp.id, ...data }, update: data });
+      }
+
       for (const p of plan.packages) {
         const data = {
           customerId: p.customerId,
+          planId: p.planId,
           name: p.name,
           totalSessions: p.totalSessions,
-          usedSessions: p.usedSessions,
           pricePaid: p.pricePaid,
+          basePrice: p.basePrice,
+          commissionPercent: p.commissionPercent,
+          commissionAmount: p.commissionAmount,
+          validityDays: p.validityDays,
           purchasedAt: p.purchasedAt,
-          status: p.usedSessions >= p.totalSessions ? ("EXHAUSTED" as const) : ("ACTIVE" as const),
+          expiresAt: p.expiresAt,
         };
-        await tx.package.upsert({ where: { id: p.id }, create: { id: p.id, ...data }, update: data });
+        // usedSessions and status are recomputed from the ledger below, so app-made redemptions survive.
+        await tx.package.upsert({
+          where: { id: p.id },
+          create: { id: p.id, ...data, usedSessions: p.usedSessions, status: "ACTIVE" },
+          update: data,
+        });
       }
 
       // Re-seeding on a later day moves the seeded bookings. If one of them now lands on a slot that a
       // booking made in the app already holds, the overlap constraints would reject the move. Those
       // app-made bookings are cancelled (never deleted) so the demo data stays consistent.
+      // A displaced package booking gets its session back and a paid one is refunded (both simulated),
+      // exactly as a normal cancellation would do.
       const seededIds = plan.bookings.map((b) => b.id);
       let displaced = 0;
       for (const b of plan.bookings.filter((b) => ACTIVE_STATUSES.includes(b.status))) {
-        const res = await tx.booking.updateMany({
+        const clashes = await tx.booking.findMany({
           where: {
             id: { notIn: seededIds },
             status: { in: ACTIVE_STATUSES },
@@ -149,13 +196,30 @@ async function main() {
             endAt: { gt: b.startAt },
             OR: [{ customerId: b.customerId }, ...(b.trainerId ? [{ trainerId: b.trainerId }] : [])],
           },
-          data: {
-            status: "CANCELLED",
-            cancelledAt: new Date(),
-            cancellationReason: "Cancelled by a demo re-seed: a seeded booking now uses this slot",
-          },
+          select: { id: true, packageId: true },
         });
-        displaced += res.count;
+        for (const c of clashes) {
+          const now = new Date();
+          await tx.booking.update({
+            where: { id: c.id },
+            data: {
+              status: "CANCELLED",
+              cancelledAt: now,
+              cancellationReason: "Cancelled by a demo re-seed: a seeded booking now uses this slot",
+            },
+          });
+          if (c.packageId) {
+            await tx.packageLedgerEntry.createMany({
+              data: [{ packageId: c.packageId, bookingId: c.id, delta: 1, reason: "CANCELLATION_REFUND", note: "Demo re-seed" }],
+              skipDuplicates: true,
+            });
+          }
+          await tx.payment.updateMany({
+            where: { bookingId: c.id, status: "SUCCEEDED" },
+            data: { status: "REFUNDED", refundedAt: now },
+          });
+        }
+        displaced += clashes.length;
       }
       if (displaced > 0)
         console.warn(`Cancelled ${displaced} app-made booking(s) that clashed with seed data.`);
@@ -186,29 +250,45 @@ async function main() {
         await tx.booking.upsert({ where: { id: b.id }, create: { id: b.id, ...data }, update: data });
       }
 
-      for (const e of plan.ledger) {
-        const data = {
+      // The ledger is append-only (a database trigger rejects UPDATE/DELETE): insert missing rows only.
+      await tx.packageLedgerEntry.createMany({
+        data: plan.ledger.map((e) => ({
+          id: e.id,
           packageId: e.packageId,
           bookingId: e.bookingId,
           delta: e.delta,
           reason: e.reason,
           createdAt: e.createdAt,
-        };
-        await tx.packageLedgerEntry.upsert({
-          where: { id: e.id },
-          create: { id: e.id, ...data },
-          update: data,
+        })),
+        skipDuplicates: true,
+      });
+
+      // The cached counter always equals the ledger, including redemptions made in the app.
+      const now = new Date();
+      for (const p of plan.packages) {
+        const net = await tx.packageLedgerEntry.aggregate({ where: { packageId: p.id }, _sum: { delta: true } });
+        const used = Math.min(p.totalSessions, Math.max(0, -(net._sum.delta ?? 0)));
+        await tx.package.update({
+          where: { id: p.id },
+          data: {
+            usedSessions: used,
+            status: p.expiresAt <= now ? "EXPIRED" : used >= p.totalSessions ? "EXHAUSTED" : "ACTIVE",
+          },
         });
       }
 
       for (const p of plan.payments) {
         const data = {
           bookingId: p.bookingId,
+          packageId: p.packageId,
           amount: p.amount,
+          baseAmount: p.baseAmount,
+          commissionAmount: p.commissionAmount,
           status: p.status,
           providerReference: p.providerReference,
           idempotencyKey: p.idempotencyKey,
           failureReason: p.failureReason,
+          completedAt: p.completedAt,
         };
         await tx.payment.upsert({ where: { id: p.id }, create: { id: p.id, ...data }, update: data });
       }
@@ -218,8 +298,10 @@ async function main() {
           bookingId: s.bookingId,
           startedAt: s.startedAt,
           endsAt: s.endsAt,
+          plannedMinutes: s.plannedMinutes,
           warningSentAt: s.warningSentAt,
           completedAt: s.completedAt,
+          completionSource: s.completionSource,
           activities: s.activities as Prisma.InputJsonValue,
           trainerNotes: s.trainerNotes,
           suggestedNextWorkout: s.suggestedNextWorkout,
@@ -240,6 +322,49 @@ async function main() {
         };
         await tx.notification.upsert({ where: { id: n.id }, create: { id: n.id, ...data }, update: data });
       }
+
+      // Phase 4: per-goal tracking rows. Seeded ids, but targets/status reflect the demo, not the
+      // live app (app-made rows have generated ids and are never touched).
+      for (const g of plan.fitnessGoalTracking) {
+        const data = {
+          customerId: g.customerId,
+          goal: g.goal,
+          status: g.status,
+          target: g.target,
+          targetDate: g.targetDate,
+        };
+        await tx.fitnessGoalTracking.upsert({
+          where: { id: g.id },
+          create: { id: g.id, ...data },
+          update: data,
+        });
+      }
+
+      // Phase 4: the seeded recommendation is created once and never overwritten afterwards
+      // (feedback and status belong to the customer, not to the seed).
+      for (const r of plan.recommendations) {
+        await tx.workoutRecommendation.upsert({
+          where: { id: r.id },
+          create: {
+            id: r.id,
+            customerId: r.customerId,
+            source: r.source,
+            status: r.status,
+            goal: r.goal,
+            category: r.category,
+            title: r.title,
+            explanation: r.explanation,
+            durationMinutes: r.durationMinutes,
+            intensity: r.intensity,
+            goalSnapshot: [...r.goalSnapshot],
+            preferenceSnapshot: r.preferenceSnapshot as Prisma.InputJsonValue,
+            payload: r.payload as unknown as Prisma.InputJsonValue,
+            modelId: r.modelId,
+            createdAt: r.createdAt,
+          },
+          update: {},
+        });
+      }
     },
     // maxWait covers opening a cold pooled connection to a distant Neon region (the default is 2 s).
     { maxWait: 30_000, timeout: 120_000 },
@@ -252,10 +377,12 @@ async function main() {
     bookings: await db.booking.count(),
     payments: await db.payment.count(),
     packages: await db.package.count(),
+    packagePlans: await db.packagePlan.count(),
     sessions: await db.sessionRecord.count(),
     notifications: await db.notification.count(),
   };
   console.log("Seeded Zuryo demo data:", counts);
+  console.log(`Demo sign-in: any seeded email with password "${DEMO_PASSWORD}".`);
 }
 
 main()

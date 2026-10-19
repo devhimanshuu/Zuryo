@@ -1,12 +1,12 @@
 import { AppShell } from "@/components/layout/app-shell";
-import { getActor, listPersonas } from "@/server/auth/actor";
+import { getActor } from "@/server/auth/actor";
 
 export const dynamic = "force-dynamic";
 
 export default async function CustomerLayout({ children }: { children: React.ReactNode }) {
-  const [actor, personas] = await Promise.all([getActor("CUSTOMER"), listPersonas("CUSTOMER")]);
+  const actor = await getActor("CUSTOMER");
   return (
-    <AppShell role="CUSTOMER" personaName={actor.name} personaId={actor.userId} personas={personas}>
+    <AppShell role="CUSTOMER" accountName={actor.name}>
       {children}
     </AppShell>
   );

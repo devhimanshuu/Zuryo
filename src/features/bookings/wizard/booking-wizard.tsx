@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils/cn";
 import { formatDay, formatSlot, formatTime } from "@/lib/utils/format";
 import { bookingNotesSchema } from "@/lib/validation/booking";
 import { workoutCategorySchema, type BookingMode, type WorkoutCategory } from "@/lib/validation/enums";
+import type { BookingPayment } from "@/lib/validation/payments";
 import {
   createBookingAction,
   getInstantOfferAction,
@@ -37,6 +38,7 @@ import { PriceBreakdown } from "../price-breakdown";
 import { CATEGORY_ICON, MODE_ICON, call, choiceCard, type Loadable } from "./shared";
 import { SlotPicker } from "./slot-picker";
 import { Stepper, type StepDef } from "./stepper";
+import { PaymentChoice, defaultPayment, usablePackages, type WizardPackage } from "./payment-choice";
 import { TrainerPicker } from "./trainer-picker";
 
 type Step = "type" | "workout" | "time" | "trainer" | "review";
@@ -59,14 +61,18 @@ export type WizardCategory = {
 export type WizardProps = {
   customer: { name: string; zoneName: string; addressLine: string | null; timeZone: string };
   categories: WizardCategory[];
+  /** The customer's active packages with sessions left (the server re-checks on confirm). */
+  packages: WizardPackage[];
   initialMode?: BookingMode | null;
+  /** Pre-selected workout, e.g. carried over from a recommendation. The customer still reviews it. */
+  initialCategory?: WorkoutCategory | null;
 };
 
 const workoutFormSchema = z.object({ workoutCategory: workoutCategorySchema, notes: bookingNotesSchema });
 
 const noopSubscribe = () => () => {};
 
-export function BookingWizard({ customer, categories, initialMode }: WizardProps) {
+export function BookingWizard({ customer, categories, packages, initialMode, initialCategory }: WizardProps) {
   const router = useRouter();
   const tz = customer.timeZone;
   // False during SSR and until React hydrates. Submit buttons wait for it, so a click on the
@@ -89,6 +95,7 @@ export function BookingWizard({ customer, categories, initialMode }: WizardProps
   const [trainerId, setTrainerId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<ServiceError | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [paymentChoice, setPaymentChoice] = useState<BookingPayment | null>(null);
 
   // Latest-request guards: a slow response for an old selection never overwrites a newer one.
   const scheduleSeq = useRef(0);
@@ -108,7 +115,7 @@ export function BookingWizard({ customer, categories, initialMode }: WizardProps
   const workoutForm = useForm<z.input<typeof workoutFormSchema>, unknown, z.output<typeof workoutFormSchema>>(
     {
       resolver: zodResolver(workoutFormSchema),
-      defaultValues: { notes: "" },
+      defaultValues: { workoutCategory: initialCategory ?? undefined, notes: "" },
     },
   );
 
@@ -223,7 +230,7 @@ export function BookingWizard({ customer, categories, initialMode }: WizardProps
 
   async function confirm() {
     if (!mode || !category || !startAt || match.status !== "ready" || !trainerId) return;
-    const signature = [mode, category, startAt, trainerId, notes].join("|");
+    const signature = [mode, category, startAt, trainerId, notes, JSON.stringify(payment)].join("|");
     if (idempotency.current?.signature !== signature) {
       idempotency.current = { signature, key: crypto.randomUUID() };
     }
@@ -236,6 +243,7 @@ export function BookingWizard({ customer, categories, initialMode }: WizardProps
       preferredTrainerId: trainerId,
       notes: notes || undefined,
       expectedTotal: match.data.quote.totalAmount,
+      payment,
       idempotencyKey: idempotency.current.key,
     });
     if (res.ok) {
@@ -246,6 +254,8 @@ export function BookingWizard({ customer, categories, initialMode }: WizardProps
     if (res.error.code === "PRICE_CHANGED" && res.error.quote) {
       setMatch({ status: "ready", data: { ...match.data, quote: res.error.quote } });
     }
+    // A declined payment is final for that request; the next confirm is a new attempt with a new key.
+    if (res.error.code === "PAYMENT_FAILED") idempotency.current = null;
     setSubmitError(res.error);
   }
 
@@ -254,6 +264,15 @@ export function BookingWizard({ customer, categories, initialMode }: WizardProps
     const current = STEPS.findIndex((s) => s.id === step);
     return order < current && !submitting;
   };
+
+  // The customer's choice, unless it names a package that can't cover the chosen slot.
+  const payment: BookingPayment = !startAt
+    ? { method: "SIMULATED_PAYMENT", outcome: "SUCCEED" }
+    : paymentChoice &&
+        (paymentChoice.method !== "PACKAGE" ||
+          usablePackages(packages, startAt).some((p) => p.id === paymentChoice.packageId))
+      ? paymentChoice
+      : defaultPayment(packages, startAt);
 
   const selectedTrainer =
     match.status === "ready" ? match.data.trainers.find((t) => t.trainerId === trainerId) : undefined;
@@ -341,6 +360,13 @@ export function BookingWizard({ customer, categories, initialMode }: WizardProps
               title="What would you like to work on?"
               description={`Trainers are matched to the workout you choose, from ${customer.zoneName}.`}
             >
+              {initialCategory ? (
+                <Notice tone="info" className="-mt-2">
+                  Pre-filled from your workout recommendation:{" "}
+                  <strong>{categoryLabel(initialCategory)}</strong>. Change it if you like — the rest of the
+                  booking works exactly as usual.
+                </Notice>
+              ) : null}
               <form onSubmit={submitWorkout} method="post" noValidate className="grid gap-6">
                 <fieldset className="min-w-0">
                   <legend className="sr-only">Workout type</legend>
@@ -611,14 +637,24 @@ export function BookingWizard({ customer, categories, initialMode }: WizardProps
                   <h3 className="mb-3 font-semibold">Price</h3>
                   <PriceBreakdown price={match.data.quote} />
                   <p className="mt-3 text-body-sm text-ink-subtle">
-                    Calculated by Zuryo from the current pricing rules and saved with your booking.
+                    Calculated by Zuryo from the current pricing rules and saved with your booking. The
+                    commission goes to your community; the session price goes to Zuryo and your trainer.
                   </p>
                 </div>
 
-                <Notice tone="info" title="Payment isn't collected yet">
-                  Checkout and session packages arrive in a later phase. Confirming reserves the slot and
-                  records this price; nothing is charged.
-                </Notice>
+                <div className="rounded-lg border border-hairline bg-raised p-5">
+                  <PaymentChoice
+                    packages={packages}
+                    startAt={startAt}
+                    total={match.data.quote.totalAmount}
+                    value={payment}
+                    onChange={(v) => {
+                      setPaymentChoice(v);
+                      setSubmitError(null);
+                    }}
+                    tz={tz}
+                  />
+                </div>
 
                 {submitError ? (
                   <SubmitProblem
@@ -649,7 +685,11 @@ export function BookingWizard({ customer, categories, initialMode }: WizardProps
                   loading={submitting}
                   onClick={() => void confirm()}
                 >
-                  {submitting ? "Booking…" : `Confirm booking · ${formatINR(match.data.quote.totalAmount)}`}
+                  {submitting
+                    ? "Booking…"
+                    : payment.method === "PACKAGE"
+                      ? "Confirm with package session"
+                      : `Confirm and pay ${formatINR(match.data.quote.totalAmount)}`}
                 </Button>
               </StepFooter>
             </StepFrame>
@@ -905,7 +945,13 @@ function SubmitProblem({
     <div className="grid gap-3">
       <Notice
         tone={error.code === "PRICE_CHANGED" ? "warning" : "danger"}
-        title={error.code === "PRICE_CHANGED" ? "The price changed" : "We couldn't book this session"}
+        title={
+          error.code === "PRICE_CHANGED"
+            ? "The price changed"
+            : error.code === "PAYMENT_FAILED"
+              ? "Payment declined (demo)"
+              : "We couldn't book this session"
+        }
         live
       >
         {error.message}

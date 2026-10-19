@@ -32,6 +32,13 @@ export const BOOKING_HORIZON_DAYS = 14;
  */
 export const SERVICE_DAY = { startMinute: 6 * 60, endMinute: 21 * 60 } as const;
 
+/** Minutes before the end at which the "wrap up" warning goes out (55 minutes into a 60-minute session). */
+export const SESSION_WARNING_BEFORE_END_MINUTES = 5;
+/** A trainer may start a session from 15 minutes before its scheduled time... */
+export const SESSION_START_EARLY_MINUTES = 15;
+/** ...until 30 minutes after it. Later than that the booking needs operations' attention. */
+export const SESSION_START_LATE_MINUTES = 30;
+
 export const NOTES_MAX_LENGTH = 500;
 export const CANCELLATION_REASON_MAX_LENGTH = 280;
 

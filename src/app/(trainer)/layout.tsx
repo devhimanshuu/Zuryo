@@ -1,12 +1,12 @@
 import { AppShell } from "@/components/layout/app-shell";
-import { getActor, listPersonas } from "@/server/auth/actor";
+import { getActor } from "@/server/auth/actor";
 
 export const dynamic = "force-dynamic";
 
 export default async function TrainerLayout({ children }: { children: React.ReactNode }) {
-  const [actor, personas] = await Promise.all([getActor("TRAINER"), listPersonas("TRAINER")]);
+  const actor = await getActor("TRAINER");
   return (
-    <AppShell role="TRAINER" personaName={actor.name} personaId={actor.userId} personas={personas}>
+    <AppShell role="TRAINER" accountName={actor.name}>
       {children}
     </AppShell>
   );

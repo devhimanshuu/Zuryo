@@ -10,6 +10,7 @@ const schema = createBookingInputSchema(() => NOW);
 const base = {
   workoutCategory: "STRENGTH",
   idempotencyKey: "6f1c2b9e-3d4a-4c8e-9b1f-2a7d5e8c0f11",
+  payment: { method: "SIMULATED_PAYMENT", outcome: "SUCCEED" },
 };
 
 describe("createBookingInputSchema", () => {
@@ -78,6 +79,23 @@ describe("createBookingInputSchema", () => {
     expect(parsed.notes).toBe("Bring bands");
     expect(schema.parse({ ...ok, notes: "   " }).notes).toBeUndefined();
     expect(schema.safeParse({ ...ok, notes: "x".repeat(501) }).success).toBe(false);
+  });
+
+  it("requires an explicit way to pay and rejects anything that looks like card data", () => {
+    const ok = { ...base, mode: "SCHEDULED", startAt: "2026-10-20T04:30:00Z" };
+    expect(schema.safeParse({ ...ok, payment: { method: "PACKAGE", packageId: "pkg_1" } }).success).toBe(true);
+    expect(schema.safeParse({ ...ok, payment: undefined }).success).toBe(false);
+    for (const payment of [
+      { method: "SIMULATED_PAYMENT" },
+      { method: "SIMULATED_PAYMENT", outcome: "MAYBE" },
+      { method: "SIMULATED_PAYMENT", outcome: "SUCCEED", cardNumber: "4111111111111111" },
+      { method: "SIMULATED_PAYMENT", outcome: "SUCCEED", status: "SUCCEEDED" },
+      { method: "PACKAGE" },
+      { method: "PACKAGE", packageId: "pkg_1", remaining: 99 },
+      { method: "CASH" },
+    ]) {
+      expect(schema.safeParse({ ...ok, payment }).success, JSON.stringify(payment)).toBe(false);
+    }
   });
 
   it("only accepts a well-formed expected total (used as a guard, never as the price)", () => {

@@ -7,9 +7,24 @@ import { categoryLabel } from "@/lib/booking/categories";
 import { INELIGIBLE_MESSAGE, ineligibility, rankTrainers } from "@/lib/booking/matching";
 import { quoteSession, type PriceQuote } from "@/lib/booking/pricing";
 import { ACTIVE_BOOKING_STATUSES, CANCELLABLE_STATUSES } from "@/lib/booking/rules";
+import {
+  REDEMPTION_MESSAGE,
+  cancellationRestoresSession,
+  redemptionBlocker,
+  type RedemptionBlocker,
+} from "@/lib/packages/packages";
+import { formatINR } from "@/lib/pricing";
 import { formatSlot } from "@/lib/utils/format";
 import { cancelBookingInputSchema, createBookingInputSchema } from "@/lib/validation/booking";
 import type { Actor } from "@/server/auth/actor";
+import { notify, type NewNotification } from "@/server/notifications/notification-service";
+import {
+  checkRedemption,
+  lockPackage,
+  recordRedemption,
+  restoreRedemption,
+} from "@/server/packages/package-service";
+import { runSimulatedPayment } from "@/server/payments/simulated-provider";
 import {
   dayRange,
   findAlternatives,
@@ -40,9 +55,16 @@ export type CreatedBooking = {
   startAt: string;
   trainerName: string | null;
   totalAmount: string;
+  /** How the session is paid for: one package session, or a (simulated) payment of totalAmount. */
+  coverage: "PACKAGE" | "PAYMENT";
+  /** Sessions left in the package after this booking, when coverage is PACKAGE. */
+  packageSessionsLeft: number | null;
   /** True when this was a retry of a request that had already created the booking. */
   replayed: boolean;
 };
+
+const DECLINED_MESSAGE =
+  "The simulated payment was declined, so nothing was booked and the slot wasn't held. Try again or choose another way to pay.";
 
 type Reservation = {
   trainerId: string;
@@ -55,7 +77,9 @@ type Reservation = {
 };
 
 type ReserveOutcome =
-  | { kind: "created"; booking: { id: string; reference: string } }
+  | { kind: "created"; booking: { id: string; reference: string }; packageSessionsLeft: number | null }
+  | { kind: "payment_declined" }
+  | { kind: "package_unavailable"; blocker: RedemptionBlocker }
   | { kind: "trainer_unavailable" }
   | { kind: "customer_conflict" }
   | { kind: "duplicate_request" };
@@ -69,7 +93,11 @@ type ReserveOutcome =
  *  2. Under the lock, availability windows and overlapping active bookings are re-read (READ
  *     COMMITTED gives each statement a fresh snapshot, so a booking committed by the request we
  *     waited for is visible) and the slot is re-validated.
- *  3. The booking and its notifications are inserted in the same transaction.
+ *  3. Payment happens in the same transaction. A package session: the package row is locked too,
+ *     re-checked (owner, paid, unexpired, sessions left) and debited through the append-only ledger.
+ *     A simulated payment: the provider's answer is recorded; a decline turns the booking into FAILED,
+ *     which holds no slot (it is outside the overlap constraints' predicate).
+ *  4. The booking, payment or ledger row and the notifications commit together, or not at all.
  *
  * The `Booking_trainer_no_overlap` / `Booking_customer_no_overlap` exclusion constraints back this
  * up inside Postgres: even a code path that skipped steps 1–2 could not commit an overlap.
@@ -114,6 +142,16 @@ async function reserve(deps: BookingDeps, r: Reservation): Promise<ReserveOutcom
         );
         if (!free.free) return { kind: "trainer_unavailable" };
 
+        const now = deps.now();
+        const payment = r.input.payment;
+        const pkg = payment.method === "PACKAGE" ? await lockPackage(tx, payment.packageId) : null;
+        if (payment.method === "PACKAGE") {
+          const blocker = checkRedemption(pkg, { customerId: r.customer.userId, startAt: r.startAt, now });
+          if (blocker) return { kind: "package_unavailable", blocker };
+        }
+        const charge = payment.method === "SIMULATED_PAYMENT" ? runSimulatedPayment(payment.outcome) : null;
+        const declined = charge?.status === "FAILED";
+
         const reference = newReference();
         const booking = await tx.booking.create({
           data: {
@@ -122,8 +160,9 @@ async function reserve(deps: BookingDeps, r: Reservation): Promise<ReserveOutcom
             trainerId: r.trainerId,
             preferredTrainerId: r.input.preferredTrainerId ?? null,
             serviceZoneId: r.customer.serviceZoneId,
+            packageId: pkg?.id ?? null,
             mode: r.input.mode,
-            status: "CONFIRMED",
+            status: declined ? "FAILED" : "CONFIRMED",
             startAt: r.startAt,
             endAt: r.endAt,
             workoutCategory: r.input.workoutCategory,
@@ -143,25 +182,72 @@ async function reserve(deps: BookingDeps, r: Reservation): Promise<ReserveOutcom
 
         const when = formatSlot(r.startAt, r.customer.timeZone);
         const what = categoryLabel(r.input.workoutCategory);
-        await tx.notification.createMany({
-          data: [
-            {
-              recipientId: r.trainerId,
+        let paymentId: string | null = null;
+        let packageSessionsLeft: number | null = null;
+        if (pkg) {
+          packageSessionsLeft = await recordRedemption(tx, pkg, booking.id);
+        } else if (charge) {
+          const row = await tx.payment.create({
+            data: {
               bookingId: booking.id,
-              type: "BOOKING_ASSIGNED",
-              title: `New session with ${r.customer.name}`,
-              message: `${what} · ${when} · ${r.customer.zoneName}`,
+              amount: r.quote.totalAmount,
+              baseAmount: r.quote.sessionPrice,
+              commissionAmount: r.quote.commissionAmount,
+              currency: r.quote.currency,
+              status: charge.status,
+              providerReference: charge.providerReference,
+              failureReason: charge.failureReason,
+              idempotencyKey: `booking:${r.input.idempotencyKey}`,
+              completedAt: now,
             },
+            select: { id: true },
+          });
+          paymentId = row.id;
+        }
+
+        if (declined) {
+          await notify(tx, [
             {
               recipientId: r.customer.userId,
               bookingId: booking.id,
-              type: "BOOKING_ASSIGNED",
-              title: `${r.trainerName} is your trainer`,
-              message: `${what} on ${when}. Booking ${booking.reference}.`,
+              paymentId,
+              type: "PAYMENT_FAILED",
+              title: "Payment declined (demo)",
+              message: `The simulated payment of ${formatINR(r.quote.totalAmount)} for ${what} on ${when} was declined. Nothing was booked.`,
+              dedupeKey: `payment-failed:${paymentId}`,
             },
-          ],
-        });
-        return { kind: "created", booking };
+          ]);
+          return { kind: "payment_declined" };
+        }
+
+        const customerNote: NewNotification = pkg
+          ? {
+              recipientId: r.customer.userId,
+              bookingId: booking.id,
+              packageId: pkg.id,
+              type: "PACKAGE_SESSION_REDEEMED",
+              title: `Booked with ${r.trainerName}, using ${pkg.name}`,
+              message: `${what} on ${when}. 1 session used, ${packageSessionsLeft} left. Booking ${booking.reference}.`,
+            }
+          : {
+              recipientId: r.customer.userId,
+              bookingId: booking.id,
+              paymentId,
+              type: "PAYMENT_SUCCEEDED",
+              title: `${r.trainerName} is your trainer`,
+              message: `${what} on ${when}. Paid ${formatINR(r.quote.totalAmount)} (simulated). Booking ${booking.reference}.`,
+            };
+        await notify(tx, [
+          {
+            recipientId: r.trainerId,
+            bookingId: booking.id,
+            type: "BOOKING_ASSIGNED",
+            title: `New session with ${r.customer.name}`,
+            message: `${what} · ${when} · ${r.customer.zoneName}`,
+          },
+          customerNote,
+        ]);
+        return { kind: "created", booking, packageSessionsLeft };
       }, deps.tx);
     } catch (err) {
       const constraint = exclusionConstraint(err);
@@ -188,9 +274,12 @@ async function replayExisting(
       customerId: true,
       startAt: true,
       mode: true,
+      status: true,
+      packageId: true,
       workoutCategory: true,
       totalAmount: true,
       trainer: { select: { user: { select: { name: true } } } },
+      package: { select: { totalSessions: true, usedSessions: true } },
     },
   });
   if (!existing) return null;
@@ -198,16 +287,21 @@ async function replayExisting(
     existing.customerId === actor.userId &&
     existing.startAt.getTime() === input.startAt.getTime() &&
     existing.mode === input.mode &&
-    existing.workoutCategory === input.workoutCategory;
+    existing.workoutCategory === input.workoutCategory &&
+    existing.packageId === (input.payment.method === "PACKAGE" ? input.payment.packageId : null);
   if (!same) {
     return fail("CONFLICT", "This booking request was already used. Refresh the page and try again.");
   }
+  // The first attempt's payment was declined: report that again rather than inventing a new outcome.
+  if (existing.status === "FAILED") return fail("PAYMENT_FAILED", DECLINED_MESSAGE);
   return ok({
     id: existing.id,
     reference: existing.reference,
     startAt: existing.startAt.toISOString(),
     trainerName: existing.trainer?.user.name ?? null,
     totalAmount: existing.totalAmount.toString(),
+    coverage: existing.packageId ? "PACKAGE" : "PAYMENT",
+    packageSessionsLeft: existing.package ? existing.package.totalSessions - existing.package.usedSessions : null,
     replayed: true,
   });
 }
@@ -261,6 +355,16 @@ export async function createBooking(
     });
   }
 
+  // Early, friendly package check (re-done under the package row lock inside the transaction).
+  if (input.payment.method === "PACKAGE") {
+    const pkg = await deps.db.package.findFirst({
+      where: { id: input.payment.packageId, customerId: actor.userId },
+      select: { customerId: true, status: true, totalSessions: true, usedSessions: true, expiresAt: true },
+    });
+    const blocker = pkg ? redemptionBlocker(pkg, { customerId: actor.userId, startAt, now }) : "NOT_OWNER";
+    if (blocker) return fail("PACKAGE_UNAVAILABLE", REDEMPTION_MESSAGE[blocker]);
+  }
+
   const alternatives = () => findAlternatives(deps, customer, input.workoutCategory, startAt);
   if (hasActiveOverlap(customerBookings, startAt, endAt)) {
     return fail("CONFLICT", "You already have a session that overlaps this time.", {
@@ -312,8 +416,14 @@ export async function createBooking(
           startAt: startAt.toISOString(),
           trainerName: t.name,
           totalAmount: quote.totalAmount,
+          coverage: input.payment.method === "PACKAGE" ? "PACKAGE" : "PAYMENT",
+          packageSessionsLeft: outcome.packageSessionsLeft,
           replayed: false,
         });
+      case "payment_declined":
+        return fail("PAYMENT_FAILED", DECLINED_MESSAGE);
+      case "package_unavailable":
+        return fail("PACKAGE_UNAVAILABLE", REDEMPTION_MESSAGE[outcome.blocker]);
       case "duplicate_request":
         return (
           (await replayExisting(deps, actor, input)) ??
@@ -369,11 +479,42 @@ export async function getBookingForActor(deps: BookingDeps, actor: Actor, bookin
       serviceZone: { select: { name: true, timezone: true } },
       pricingRule: { select: { name: true, kind: true } },
       cancelledBy: { select: { id: true, name: true, role: true } },
+      package: { select: { id: true, name: true, totalSessions: true, usedSessions: true, expiresAt: true } },
+      payments: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          status: true,
+          amount: true,
+          providerReference: true,
+          failureReason: true,
+          completedAt: true,
+          refundedAt: true,
+        },
+      },
+      packageEntries: { orderBy: { createdAt: "asc" }, select: { reason: true, delta: true, createdAt: true } },
+      sessionRecord: {
+        select: {
+          startedAt: true,
+          endsAt: true,
+          plannedMinutes: true,
+          warningSentAt: true,
+          completedAt: true,
+          completionSource: true,
+        },
+      },
     },
   });
 }
 
-export type CancelledBooking = { id: string; reference: string };
+export type CancelledBooking = {
+  id: string;
+  reference: string;
+  /** A package session was given back (package-covered bookings). */
+  restoredSession: boolean;
+  /** Amount of the simulated payment marked refunded (pay-per-session bookings). */
+  refundedAmount: string | null;
+};
 
 /**
  * Cancel a booking the actor is allowed to touch. Customers cancel their own bookings, trainers the
@@ -402,6 +543,7 @@ export async function cancelBooking(
         startAt: true,
         customerId: true,
         trainerId: true,
+        packageId: true,
         workoutCategory: true,
         customer: { select: { user: { select: { name: true } } } },
         trainer: { select: { user: { select: { name: true } } } },
@@ -431,7 +573,25 @@ export async function cancelBooking(
         cancellationReason: reason ?? null,
       },
     });
-    if (res.count === 0) return false;
+    if (res.count === 0) return null;
+
+    // Give back what the booking used, at most once (unique ledger row / conditional payment update).
+    const restored =
+      booking.packageId && cancellationRestoresSession()
+        ? await restoreRedemption(tx, booking.packageId, booking.id, now)
+        : null;
+    const refundedPayment = booking.packageId
+      ? null
+      : await tx.payment.findFirst({
+          where: { bookingId: booking.id, status: "SUCCEEDED" },
+          select: { id: true, amount: true },
+        });
+    if (refundedPayment) {
+      await tx.payment.updateMany({
+        where: { id: refundedPayment.id, status: "SUCCEEDED" },
+        data: { status: "REFUNDED", refundedAt: now },
+      });
+    }
 
     const when = formatSlot(booking.startAt, booking.serviceZone.timezone);
     const by =
@@ -443,18 +603,35 @@ export async function cancelBooking(
     const recipients = [booking.customerId, booking.trainerId].filter(
       (id): id is string => !!id && id !== actor.userId,
     );
-    if (recipients.length > 0) {
-      await tx.notification.createMany({
-        data: recipients.map((recipientId) => ({
-          recipientId,
-          bookingId: booking.id,
-          type: "BOOKING_CANCELLED" as const,
-          title: `Booking ${booking.reference} cancelled`,
-          message: `${by} cancelled ${categoryLabel(booking.workoutCategory).toLowerCase()} on ${when}.${reason ? ` Reason: ${reason}` : ""}`,
-        })),
-      });
-    }
-    return true;
+    const refundNote = refundedPayment
+      ? ` Your simulated payment of ${formatINR(refundedPayment.amount)} was refunded.`
+      : "";
+    await notify(tx, [
+      ...recipients.map((recipientId) => ({
+        recipientId,
+        bookingId: booking.id,
+        type: "BOOKING_CANCELLED" as const,
+        title: `Booking ${booking.reference} cancelled`,
+        message: `${by} cancelled ${categoryLabel(booking.workoutCategory).toLowerCase()} on ${when}.${reason ? ` Reason: ${reason}` : ""}${recipientId === booking.customerId ? refundNote : ""}`,
+      })),
+      ...(restored?.restored
+        ? [
+            {
+              recipientId: booking.customerId,
+              bookingId: booking.id,
+              packageId: booking.packageId,
+              type: "PACKAGE_SESSION_RESTORED" as const,
+              title: `Session returned to ${restored.name}`,
+              message: `Booking ${booking.reference} was cancelled, so its session is back in your package (${restored.remaining} left).`,
+              dedupeKey: `package-restored:${booking.id}`,
+            },
+          ]
+        : []),
+    ]);
+    return {
+      restoredSession: restored?.restored ?? false,
+      refundedAmount: refundedPayment ? refundedPayment.amount.toString() : null,
+    };
   }, deps.tx);
 
   if (!cancelled) {
@@ -467,5 +644,5 @@ export async function cancelBooking(
       (fresh && cancellationBlocker(fresh, now)) ?? "This booking just changed. Refresh and try again.",
     );
   }
-  return ok({ id: booking.id, reference: booking.reference });
+  return ok({ id: booking.id, reference: booking.reference, ...cancelled });
 }

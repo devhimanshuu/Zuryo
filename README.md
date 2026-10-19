@@ -2,7 +2,7 @@
 
 On-demand personal training for residential communities. Customers book a 60-minute session with a qualified trainer, either **instantly** (starting within the hour) or **scheduled** for later. Trainers manage availability and run sessions, and operations teams oversee bookings, assignments and pricing.
 
-> **Status: Phase 1, foundation and product shell.** The data model, seed data, design system and all three role workspaces are in place and read real data from Postgres. Booking, checkout, authentication, the live session timer and AI recommendations are **not built yet**. Screens say so explicitly wherever a later phase fills them in.
+> **Status: full booking, payments and fitness loop (Phases 1–5).** The data model, seed data, design system and all three role workspaces read real data from Postgres. Booking with trainer matching and configurable pricing, package purchases with a simulated checkout, the session lifecycle (start, 55-minute warning, completion), fitness profiles with AI/rule-based workout recommendations, and email+password sign-in (NextAuth) are all implemented. Payments and the demo dataset are explicitly simulated.
 
 ## Stack
 
@@ -45,7 +45,9 @@ For a local Postgres, set both variables to the same URL, e.g. `postgresql://pos
 | --------------------- | --------------- | ---------------- | --------------------------------------------------------------- |
 | `DATABASE_URL`        | server only     | yes              | Pooled Postgres URL used by the app at runtime                  |
 | `DIRECT_URL`          | server only     | for migrations   | Direct Postgres URL used by `prisma migrate`                    |
-| `ANTHROPIC_API_KEY`   | server only     | no (later phase) | AI workout recommendations                                      |
+| `AUTH_SECRET`         | server only     | yes              | Signs the NextAuth session JWT (see `.env.example`)             |
+| `ANTHROPIC_API_KEY`   | server only     | no               | AI workout recommendations; unset = rule-based fallback         |
+| `ANTHROPIC_MODEL`     | server only     | no               | Model for recommendations (default `claude-3-5-haiku-latest`)   |
 | `NEXT_PUBLIC_APP_URL` | browser-visible | no               | Canonical URL for metadata; defaults to `http://localhost:3000` |
 
 Server variables are validated with Zod in `src/lib/config/env.server.ts`, which imports `server-only`. Any attempt to import it from a client component fails the build. Only `NEXT_PUBLIC_*` values reach the browser. `.env` is git-ignored; never commit real credentials.
@@ -68,15 +70,15 @@ Server variables are validated with Zod in `src/lib/config/env.server.ts`, which
 | `npm run db:reset`                | Drop, re-migrate and re-seed the dev database   |
 | `npm run db:studio`               | Browse data in Prisma Studio                    |
 
-## Demo access
+## Signing in
 
-There is **no authentication in Phase 1**. Visit `/sign-in` and pick a workspace. Each one renders a fictional seeded persona:
+Authentication is real (NextAuth v5, credentials provider, bcrypt-hashed passwords, signed JWT session cookie), and middleware protects each workspace by role. The database itself is demo data: every seeded account shares the demo password **`password123`** (printed by `npm run db:seed` and listed on the sign-in page).
 
-| Workspace  | URL           | Persona                                                  |
-| ---------- | ------------- | -------------------------------------------------------- |
-| Customer   | `/customer`   | Priya Sharma, Palm Grove Residences (10-session package) |
-| Trainer    | `/trainer`    | Arjun Mehta, strength and mobility                       |
-| Operations | `/operations` | Neha Kapoor                                              |
+| Workspace  | Seeded account                                                |
+| ---------- | ------------------------------------------------------------- |
+| Customer   | `priya.sharma@demo.zuryo.example` (or any other seeded email) |
+| Trainer    | `arjun.mehta@demo.zuryo.example`                              |
+| Operations | `neha.kapoor@demo.zuryo.example`                              |
 
 All people, emails (`*.example`), addresses and bookings are synthetic. Demo prices (₹399 normal, ₹499 peak, 10% society commission) are configuration, not market claims.
 
@@ -91,12 +93,13 @@ All people, emails (`*.example`), addresses and bookings are synthetic. Demo pri
 
 ```
 prisma/            schema, migrations, deterministic seed (seed-data.ts is pure and unit-tested)
-src/app/           routes: (marketing) (auth) (customer) (trainer) (operations)
+src/app/           routes: (marketing) (auth) (customer) (trainer) (operations), api/auth + api/cron
 src/components/    ui/ primitives · layout/ shells & navigation · shared/ badges, states, images
-src/features/      feature-specific UI (bookings, customers)
-src/lib/           config/ env + images · db/ Prisma client (server-only) · pricing/ money maths
-                   validation/ Zod schemas · utils/
-src/server/        server-only data access (queries/) and demo personas
-tests/             Vitest suites
+src/features/      feature-specific UI (bookings, packages, payments, sessions, fitness, auth)
+src/lib/           config/ env · db/ Prisma client · pricing/ money maths · booking/ · packages/ ·
+                   sessions/ · fitness/ · ai/ (provider abstraction) · auth/ (NextAuth) · validation/ · utils/
+src/server/        server-only services & actions (booking, packages, payments, sessions, fitness, auth)
+src/middleware.ts  role-based route protection (NextAuth)
+tests/             Vitest unit suites + integration/ (live Postgres, `npm run test:integration`)
 docs/              architecture and decisions
 ```

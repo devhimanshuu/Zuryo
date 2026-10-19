@@ -8,7 +8,7 @@ export default function BookingNotFound() {
     <EmptyState
       icon={SearchX}
       title="Booking not found"
-      body="It may belong to a different account, or the link is wrong. If you switched demo user, this booking belongs to someone else."
+      body="It may belong to a different account, or the link is wrong. It may belong to a different account. Sign in as that account to see it."
       action={
         <Button asChild variant="primary">
           <Link href="/customer/bookings">See my bookings</Link>

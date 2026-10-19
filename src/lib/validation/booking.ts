@@ -10,6 +10,7 @@ import {
 } from "@/lib/booking/rules";
 import { isValidDateKey } from "@/lib/booking/time";
 import { availabilityStatusSchema, bookingModeSchema, workoutCategorySchema } from "./enums";
+import { bookingPaymentSchema } from "./payments";
 
 export { INSTANT_WINDOW_MINUTES, MAX_ADVANCE_DAYS, SESSION_MINUTES };
 
@@ -50,6 +51,8 @@ export function createBookingInputSchema(now: () => Date = () => new Date()) {
         .string()
         .regex(/^\d{1,8}\.\d{2}$/, "Invalid amount")
         .optional(),
+      /** A session from one of the customer's packages, or a (simulated) payment. */
+      payment: bookingPaymentSchema,
       /** Client-generated UUID; retries with the same key return the same booking. */
       idempotencyKey: z.string().uuid("idempotencyKey must be a UUID"),
     })

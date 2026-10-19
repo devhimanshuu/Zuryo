@@ -10,11 +10,13 @@ import { CancelBookingButton } from "@/features/bookings/cancel-booking-button";
 import { PriceBreakdown } from "@/features/bookings/price-breakdown";
 import { CANCELLATION_POLICY_NOTE, cancellationBlocker } from "@/lib/booking/cancellation";
 import { categoryLabel } from "@/lib/booking/categories";
+import { coverageSummary } from "@/lib/payments/coverage";
 import { safely } from "@/lib/utils/errors";
 import { formatDay, formatSlot, formatTime } from "@/lib/utils/format";
 import { getActor } from "@/server/auth/actor";
 import { getBookingForActor } from "@/server/booking/booking-service";
 import { defaultDeps } from "@/server/booking/deps";
+import { reconcileDueSessions } from "@/server/sessions/session-service";
 
 export const metadata: Metadata = { title: "Booking details" };
 
@@ -28,7 +30,11 @@ export default async function BookingDetailPage({
   const [{ id }, { created }] = await Promise.all([params, searchParams]);
   const actor = await getActor("CUSTOMER");
   // Scoped to the acting customer: someone else's booking id resolves to "not found".
-  const result = await safely(() => getBookingForActor(defaultDeps(), actor, id));
+  const result = await safely(async () => {
+    const deps = defaultDeps();
+    await reconcileDueSessions(deps, { customerId: actor.userId });
+    return getBookingForActor(deps, actor, id);
+  });
   if (!result.ok) return <ErrorState message={result.error.message} />;
   const b = result.data;
   if (!b) notFound();
@@ -36,6 +42,8 @@ export default async function BookingDetailPage({
   const tz = b.serviceZone.timezone;
   const now = new Date();
   const blocker = cancellationBlocker(b, now);
+  const coverage = coverageSummary(b);
+  const payment = b.payments[0];
   const trainerName = b.trainer?.user.name ?? null;
   const cancelledBy =
     b.cancelledBy?.id === actor.userId
@@ -128,11 +136,64 @@ export default async function BookingDetailPage({
               <p className="text-body-sm text-ink-subtle">
                 Recorded when you booked ({b.pricingRule.name}). Later pricing changes don&apos;t affect it.
               </p>
-              <Notice tone="info">
-                Payment isn&apos;t collected yet. Checkout arrives in a later phase.
-              </Notice>
+              <div className="grid gap-1.5 rounded-md bg-sunken px-3 py-2.5 text-body-sm">
+                <p className="font-semibold">{coverage.label}</p>
+                {b.package ? (
+                  <p className="text-ink-muted">
+                    Covered by your package, so nothing was charged for this booking.{" "}
+                    {b.package.totalSessions - b.package.usedSessions} of {b.package.totalSessions} sessions left.{" "}
+                    <Link href="/customer/packages" className="font-semibold text-brand hover:underline">
+                      Package history
+                    </Link>
+                  </p>
+                ) : payment ? (
+                  <p className="text-ink-muted">
+                    Simulated payment {payment.providerReference}
+                    {payment.completedAt ? ` · ${formatSlot(payment.completedAt, tz)}` : ""}
+                    {payment.refundedAt ? ` · refunded ${formatSlot(payment.refundedAt, tz)}` : ""}
+                    {payment.failureReason ? ` · ${payment.failureReason}` : ""}. No real money moved.
+                  </p>
+                ) : (
+                  <p className="text-ink-muted">This booking was made before checkout existed.</p>
+                )}
+              </div>
             </CardContent>
           </Card>
+
+          {b.sessionRecord ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Session</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ol className="grid gap-2 text-body-sm">
+                  <li className="flex justify-between gap-3">
+                    <span className="text-ink-muted">Started</span>
+                    <span className="font-semibold tabular">{formatTime(b.sessionRecord.startedAt, tz)}</span>
+                  </li>
+                  <li className="flex justify-between gap-3">
+                    <span className="text-ink-muted">Wrap-up reminder</span>
+                    <span className="font-semibold tabular">
+                      {b.sessionRecord.warningSentAt ? formatTime(b.sessionRecord.warningSentAt, tz) : "Not yet"}
+                    </span>
+                  </li>
+                  <li className="flex justify-between gap-3">
+                    <span className="text-ink-muted">Ends</span>
+                    <span className="font-semibold tabular">{formatTime(b.sessionRecord.endsAt, tz)}</span>
+                  </li>
+                  <li className="flex justify-between gap-3 border-t border-hairline pt-2">
+                    <span className="text-ink-muted">Completed</span>
+                    <span className="font-semibold tabular">
+                      {b.sessionRecord.completedAt
+                        ? `${formatTime(b.sessionRecord.completedAt, tz)}${b.sessionRecord.completionSource === "DEADLINE" ? " (at the 60-minute end)" : " (by your trainer)"}`
+                        : "In progress"}
+                    </span>
+                  </li>
+                </ol>
+                <p className="mt-3 text-body-sm text-ink-subtle">Times are recorded by Zuryo&apos;s server.</p>
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader>

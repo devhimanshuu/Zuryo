@@ -21,6 +21,16 @@ export async function getBookingSetup(userId: string) {
   return { customer, categories };
 }
 
+/** Everything a customer's booking list shows: coverage, payment state and session timing. */
+export const customerBookingInclude = {
+  trainer: { include: { user: { select: { name: true } } } },
+  serviceZone: { select: { name: true } },
+  package: { select: { name: true } },
+  payments: { orderBy: { createdAt: "desc" as const }, select: { status: true, amount: true } },
+  packageEntries: { select: { reason: true } },
+  sessionRecord: { select: { startedAt: true, endsAt: true, completedAt: true, completionSource: true } },
+};
+
 export async function getCustomerHome(userId: string, now = new Date()) {
   const db = getDb();
   const [profile, upcoming, recent, pkg, unread] = await Promise.all([
@@ -32,10 +42,7 @@ export async function getCustomerHome(userId: string, now = new Date()) {
       where: { customerId: userId, status: { in: [...ACTIVE_STATUSES] }, endAt: { gte: now } },
       orderBy: { startAt: "asc" },
       take: 3,
-      include: {
-        trainer: { include: { user: { select: { name: true } } } },
-        serviceZone: { select: { name: true } },
-      },
+      include: customerBookingInclude,
     }),
     db.booking.findMany({
       where: { customerId: userId, status: "COMPLETED" },
@@ -56,10 +63,7 @@ export async function getCustomerBookings(userId: string) {
   return getDb().booking.findMany({
     where: { customerId: userId },
     orderBy: { startAt: "desc" },
-    include: {
-      trainer: { include: { user: { select: { name: true } } } },
-      serviceZone: { select: { name: true } },
-    },
+    include: customerBookingInclude,
   });
 }
 

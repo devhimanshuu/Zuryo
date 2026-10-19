@@ -54,6 +54,32 @@ describe("seed plan", () => {
     }
   });
 
+  it("prices packages as plan price + standard commission, each with a successful simulated payment", () => {
+    expect(plan.packagePlans.map((p) => p.sessionCount)).toEqual([1, 5, 10]);
+    for (const p of plan.packages) {
+      const toPaise = (v: string) => Math.round(Number(v) * 100);
+      expect(toPaise(p.pricePaid)).toBe(toPaise(p.basePrice) + toPaise(p.commissionAmount));
+      const pay = plan.payments.find((x) => x.packageId === p.id);
+      expect(pay?.status).toBe("SUCCEEDED");
+      expect(pay?.amount).toBe(p.pricePaid);
+      expect(p.expiresAt > p.purchasedAt).toBe(true);
+    }
+  });
+
+  it("gives every payment exactly one target and a consistent breakdown", () => {
+    for (const p of plan.payments) {
+      expect([p.bookingId, p.packageId].filter(Boolean)).toHaveLength(1);
+      const toPaise = (v: string) => Math.round(Number(v) * 100);
+      expect(toPaise(p.amount)).toBe(toPaise(p.baseAmount) + toPaise(p.commissionAmount));
+    }
+  });
+
+  it("records seeded sessions with a 60-minute deadline", () => {
+    for (const s of plan.sessions) {
+      expect(s.endsAt.getTime() - s.startedAt.getTime()).toBe(s.plannedMinutes * 60_000);
+    }
+  });
+
   it("never double-books a customer either", () => {
     const active = plan.bookings.filter((b) => !["CANCELLED", "COMPLETED", "FAILED"].includes(b.status));
     for (const a of active) {

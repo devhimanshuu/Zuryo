@@ -1,4 +1,5 @@
 import {
+  Bell,
   CalendarCheck,
   CalendarClock,
   Dumbbell,
@@ -7,6 +8,7 @@ import {
   IndianRupee,
   LayoutDashboard,
   ListChecks,
+  Package,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -24,7 +26,9 @@ export const NAV: Record<Role, { title: string; items: NavItem[] }> = {
     items: [
       { href: "/customer", label: "Home", icon: House },
       { href: "/customer/bookings", label: "My bookings", icon: CalendarCheck },
+      { href: "/customer/packages", label: "Packages", icon: Package },
       { href: "/customer/fitness", label: "Fitness", icon: HeartPulse },
+      { href: "/customer/notifications", label: "Updates", icon: Bell },
     ],
   },
   TRAINER: {
@@ -33,6 +37,7 @@ export const NAV: Record<Role, { title: string; items: NavItem[] }> = {
       { href: "/trainer", label: "Overview", icon: LayoutDashboard },
       { href: "/trainer/sessions", label: "My sessions", icon: Dumbbell },
       { href: "/trainer/availability", label: "Availability", icon: CalendarClock },
+      { href: "/trainer/notifications", label: "Updates", icon: Bell },
     ],
   },
   OPERATIONS: {

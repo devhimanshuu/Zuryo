@@ -6,16 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookingItem } from "@/features/bookings/booking-item";
 import { PackageMeter } from "@/features/customers/package-meter";
+import { coverageSummary } from "@/lib/payments/coverage";
 import { safely } from "@/lib/utils/errors";
 import { formatDay, greeting, titleCase } from "@/lib/utils/format";
 import { getActor } from "@/server/auth/actor";
+import { defaultDeps } from "@/server/booking/deps";
 import { getCustomerHome } from "@/server/queries/customer";
+import { reconcileDueSessions } from "@/server/sessions/session-service";
 
 export const metadata: Metadata = { title: "Home" };
 
 export default async function CustomerHomePage() {
   const actor = await getActor("CUSTOMER");
-  const result = await safely(() => getCustomerHome(actor.userId));
+  const result = await safely(async () => {
+    await reconcileDueSessions(defaultDeps(), { customerId: actor.userId });
+    return getCustomerHome(actor.userId);
+  });
   if (!result.ok) return <ErrorState message={result.error.message} />;
   const { profile, upcoming, recent, pkg, unread } = result.data;
   if (!profile)
@@ -52,6 +58,8 @@ export default async function CustomerHomePage() {
               counterpartName: next.trainer?.user.name ?? null,
               location: next.serviceZone.name,
               href: `/customer/bookings/${next.id}`,
+              coverage: coverageSummary(next),
+              session: next.sessionRecord,
             }}
           />
         ) : (
@@ -81,9 +89,25 @@ export default async function CustomerHomePage() {
           </CardHeader>
           <CardContent>
             {pkg ? (
-              <PackageMeter name={pkg.name} total={pkg.totalSessions} used={pkg.usedSessions} />
+              <div className="grid gap-3">
+                <PackageMeter name={pkg.name} total={pkg.totalSessions} used={pkg.usedSessions} />
+                <Link
+                  href="/customer/packages"
+                  className="inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline"
+                >
+                  Usage history and packages <ArrowRight className="size-4" aria-hidden />
+                </Link>
+              </div>
             ) : (
-              <p className="text-ink-muted">No active package. You pay per session.</p>
+              <div className="grid gap-3">
+                <p className="text-ink-muted">No active package. You pay per session.</p>
+                <Link
+                  href="/customer/packages"
+                  className="inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline"
+                >
+                  See packages <ArrowRight className="size-4" aria-hidden />
+                </Link>
+              </div>
             )}
           </CardContent>
         </Card>

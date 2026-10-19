@@ -1,5 +1,6 @@
-import { Bell, CalendarDays } from "lucide-react";
+import { ArrowRight, Bell, CalendarDays } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState, EmptyState, PhaseNote } from "@/components/shared/states";
 import { Metric } from "@/components/shared/metric";
@@ -10,7 +11,9 @@ import { safely } from "@/lib/utils/errors";
 import { formatDay, formatSlot, formatTime } from "@/lib/utils/format";
 import { addDays, istMidnight } from "@/lib/utils/time";
 import { getActor } from "@/server/auth/actor";
+import { defaultDeps } from "@/server/booking/deps";
 import { getTrainerOverview } from "@/server/queries/trainer";
+import { reconcileDueSessions } from "@/server/sessions/session-service";
 
 export const metadata: Metadata = { title: "Trainer overview" };
 
@@ -18,10 +21,14 @@ export default async function TrainerOverviewPage() {
   const now = new Date();
   const dayStart = istMidnight(now);
   const actor = await getActor("TRAINER");
-  const result = await safely(() => getTrainerOverview(actor.userId, dayStart, addDays(dayStart, 1)));
+  const result = await safely(async () => {
+    await reconcileDueSessions(defaultDeps(), { trainerId: actor.userId });
+    return getTrainerOverview(actor.userId, dayStart, addDays(dayStart, 1));
+  });
   if (!result.ok) return <ErrorState message={result.error.message} />;
   const { profile, today, upcoming, notifications } = result.data;
   const next = [...today, ...upcoming].find((b) => b.endAt > now && b.status !== "COMPLETED");
+  const live = today.find((b) => b.status === "IN_PROGRESS");
 
   return (
     <div className="grid gap-8">
@@ -33,6 +40,25 @@ export default async function TrainerOverviewPage() {
         }
         className="pb-0"
       />
+
+      {live ? (
+        <Link
+          href={`/trainer/sessions/${live.id}`}
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-inverse px-5 py-4 text-ink-inverse hover:opacity-95"
+        >
+          <span>
+            <span className="block text-eyebrow font-semibold tracking-[0.08em] text-ink-inverse/70 uppercase">
+              Session in progress
+            </span>
+            <span className="block font-semibold">
+              {live.customer.user.name} · {categoryLabel(live.workoutCategory)}
+            </span>
+          </span>
+          <span className="inline-flex items-center gap-1 text-sm font-semibold">
+            Open live session <ArrowRight className="size-4" aria-hidden />
+          </span>
+        </Link>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Metric label="Sessions today" value={today.length} />
@@ -129,9 +155,7 @@ export default async function TrainerOverviewPage() {
         </Card>
       ) : null}
 
-      <PhaseNote>
-        Starting a session, the live session timer and session notes arrive in a later phase.
-      </PhaseNote>
+      <PhaseNote>Session notes, activities and workout summaries for the customer arrive in a later phase.</PhaseNote>
     </div>
   );
 }

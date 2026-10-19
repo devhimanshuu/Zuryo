@@ -11,7 +11,11 @@ export async function getTrainerOverview(userId: string, dayStart: Date, dayEnd:
   const [profile, today, upcoming, notifications] = await Promise.all([
     db.trainerProfile.findUnique({ where: { userId }, include: { serviceZone: { select: { name: true } } } }),
     db.booking.findMany({
-      where: { trainerId: userId, startAt: { gte: dayStart, lt: dayEnd }, status: { not: "CANCELLED" } },
+      where: {
+        trainerId: userId,
+        startAt: { gte: dayStart, lt: dayEnd },
+        status: { notIn: ["CANCELLED", "FAILED"] },
+      },
       orderBy: { startAt: "asc" },
       include: bookingInclude,
     }),
@@ -28,9 +32,13 @@ export async function getTrainerOverview(userId: string, dayStart: Date, dayEnd:
 
 export async function getTrainerSessions(userId: string) {
   return getDb().booking.findMany({
-    where: { trainerId: userId },
+    // Declined-payment bookings never became sessions, so trainers don't see them.
+    where: { trainerId: userId, status: { not: "FAILED" } },
     orderBy: { startAt: "desc" },
-    include: { ...bookingInclude, sessionRecord: { select: { completedAt: true } } },
+    include: {
+      ...bookingInclude,
+      sessionRecord: { select: { startedAt: true, endsAt: true, completedAt: true, completionSource: true } },
+    },
   });
 }
 

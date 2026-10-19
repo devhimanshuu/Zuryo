@@ -1,9 +1,11 @@
-import { ArrowRight, Clock, Dumbbell, MapPin, MessageSquareText, UserRound } from "lucide-react";
+import { ArrowRight, Clock, CreditCard, Dumbbell, MapPin, MessageSquareText, Timer, UserRound } from "lucide-react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { categoryLabel } from "@/lib/booking/categories";
+import type { Coverage } from "@/lib/payments/coverage";
+import { cn } from "@/lib/utils/cn";
 import { formatINR } from "@/lib/pricing";
-import { formatSlot } from "@/lib/utils/format";
+import { formatSlot, formatTime } from "@/lib/utils/format";
 import type { BookingStatus, WorkoutCategory } from "@/lib/validation/enums";
 
 export type BookingItemData = {
@@ -23,6 +25,17 @@ export type BookingItemData = {
   notes?: string | null;
   /** Details page, when one exists for this viewer. */
   href?: string;
+  /** How the booking is paid for (package session, simulated payment, …). */
+  coverage?: Coverage;
+  /** Actual session times from the server, once the trainer has started it. */
+  session?: { startedAt: Date; completedAt: Date | null; completionSource: string | null } | null;
+};
+
+const COVERAGE_TONE: Record<Coverage["tone"], string> = {
+  brand: "text-brand",
+  success: "text-success",
+  danger: "text-danger",
+  muted: "text-ink-muted",
 };
 
 /** One booking as a list row: when, status, what, who, where, what it cost, and what you can do. */
@@ -70,6 +83,23 @@ export function BookingItem({ b, actions }: { b: BookingItemData; actions?: Reac
           <li className="flex items-center gap-2">
             <Clock className="size-4 text-ink-subtle" aria-hidden /> 60 min
           </li>
+          {b.coverage ? (
+            <li className={cn("flex items-center gap-2 font-semibold", COVERAGE_TONE[b.coverage.tone])}>
+              <CreditCard className="size-4" aria-hidden />
+              <span className="truncate">{b.coverage.label}</span>
+            </li>
+          ) : null}
+          {b.session ? (
+            <li className="flex items-center gap-2 sm:col-span-2">
+              <Timer className="size-4 text-ink-subtle" aria-hidden />
+              <span>
+                Started {formatTime(b.session.startedAt)}
+                {b.session.completedAt
+                  ? ` · completed ${formatTime(b.session.completedAt)}${b.session.completionSource === "DEADLINE" ? " (at the 60-minute end)" : " by the trainer"}`
+                  : " · in progress"}
+              </span>
+            </li>
+          ) : null}
         </ul>
         {b.notes ? (
           <p className="mt-3 flex gap-2 rounded-md bg-sunken px-3 py-2 text-body-sm">

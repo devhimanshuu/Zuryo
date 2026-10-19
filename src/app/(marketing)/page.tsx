@@ -357,7 +357,7 @@ function FinalCta() {
             size="lg"
             className="border-on-brand/40 bg-transparent text-on-brand hover:bg-on-brand/10"
           >
-            <Link href="/sign-in">See all demo roles</Link>
+            <Link href="/sign-in">Sign in to explore</Link>
           </Button>
         </div>
       </div>

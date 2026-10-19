@@ -22,7 +22,23 @@ export const FITNESS_GOALS = [
   "ENDURANCE",
   "POSTURE",
   "GENERAL_FITNESS",
+  "CONSISTENCY",
+  "BALANCE",
 ] as const;
+export const WORKOUT_INTENSITIES = ["LOW", "MODERATE", "HIGH"] as const;
+export const WORKOUT_ENVIRONMENTS = ["HOME", "OUTDOOR"] as const;
+export const EQUIPMENT_OPTIONS = [
+  "NONE",
+  "MAT",
+  "DUMBBELLS",
+  "RESISTANCE_BAND",
+  "KETTLEBELL",
+  "SKIPPING_ROPE",
+  "STATIONARY_BIKE",
+] as const;
+export const RECOMMENDATION_SOURCES = ["AI", "RULE_BASED"] as const;
+export const RECOMMENDATION_STATUSES = ["ACTIVE", "ARCHIVED"] as const;
+export const RECOMMENDATION_FEEDBACKS = ["USEFUL", "NOT_USEFUL"] as const;
 export const WORKOUT_PREFERENCES = [
   "MORNING",
   "EVENING",
@@ -42,6 +58,12 @@ export const bookingModeSchema = z.enum(BOOKING_MODES);
 export const bookingStatusSchema = z.enum(BOOKING_STATUSES);
 export const fitnessLevelSchema = z.enum(FITNESS_LEVELS);
 export const fitnessGoalSchema = z.enum(FITNESS_GOALS);
+export const workoutIntensitySchema = z.enum(WORKOUT_INTENSITIES, { error: "Choose an intensity" });
+export const workoutEnvironmentSchema = z.enum(WORKOUT_ENVIRONMENTS);
+export const equipmentOptionSchema = z.enum(EQUIPMENT_OPTIONS);
+export const recommendationSourceSchema = z.enum(RECOMMENDATION_SOURCES);
+export const recommendationStatusSchema = z.enum(RECOMMENDATION_STATUSES);
+export const recommendationFeedbackSchema = z.enum(RECOMMENDATION_FEEDBACKS);
 export const workoutPreferenceSchema = z.enum(WORKOUT_PREFERENCES);
 export const pricingKindSchema = z.enum(PRICING_KINDS);
 export const workoutCategorySchema = z.enum(WORKOUT_CATEGORIES, { error: "Choose a workout type" });
@@ -52,6 +74,15 @@ export type BookingMode = z.infer<typeof bookingModeSchema>;
 export type BookingStatus = z.infer<typeof bookingStatusSchema>;
 export type WorkoutCategory = z.infer<typeof workoutCategorySchema>;
 export type AvailabilityStatus = z.infer<typeof availabilityStatusSchema>;
+export type FitnessLevel = z.infer<typeof fitnessLevelSchema>;
+export type FitnessGoal = z.infer<typeof fitnessGoalSchema>;
+export type WorkoutPreference = z.infer<typeof workoutPreferenceSchema>;
+export type WorkoutIntensity = z.infer<typeof workoutIntensitySchema>;
+export type WorkoutEnvironment = z.infer<typeof workoutEnvironmentSchema>;
+export type EquipmentOption = z.infer<typeof equipmentOptionSchema>;
+export type RecommendationSource = z.infer<typeof recommendationSourceSchema>;
+export type RecommendationStatus = z.infer<typeof recommendationStatusSchema>;
+export type RecommendationFeedback = z.infer<typeof recommendationFeedbackSchema>;
 
 export const ROLE_HOME: Record<Role, string> = {
   CUSTOMER: "/customer",

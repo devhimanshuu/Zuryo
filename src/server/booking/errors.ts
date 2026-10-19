@@ -14,6 +14,8 @@ export type ServiceErrorCode =
   | "SLOT_TAKEN"
   | "NO_TRAINER"
   | "PRICE_CHANGED"
+  | "PAYMENT_FAILED"
+  | "PACKAGE_UNAVAILABLE"
   | "UNAVAILABLE"
   | "INTERNAL";
 
@@ -24,6 +26,8 @@ export type ServiceError = {
   code: ServiceErrorCode;
   message: string;
   fieldErrors?: Record<string, string[]>;
+  /** Validation issues with their full dotted path (e.g. "peak.windows.1.startMinute"). */
+  issues?: Array<{ path: string; message: string }>;
   alternatives?: SlotSuggestion[];
   quote?: PriceQuote;
 };

@@ -2,10 +2,15 @@ import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import { hashSync } from "bcryptjs";
 import { zonedDayStart } from "@/lib/booking/time";
 import { pgPoolConfig } from "@/lib/db/pool";
 import type { Actor } from "@/server/auth/actor";
 import type { BookingDeps } from "@/server/booking/deps";
+
+/** Shared test password; every seeded test user has this hash. */
+export const TEST_PASSWORD = "test-password";
+const TEST_PASSWORD_HASH = hashSync(TEST_PASSWORD, 10);
 
 export const TZ = "Asia/Kolkata";
 /** Fixed clock for every test: Monday 7 Jan 2030, 10:00 IST. */
@@ -54,12 +59,23 @@ export function request(overrides: Record<string, unknown> = {}) {
     workoutCategory: "STRENGTH",
     startAt: ist(TOMORROW, "10:00").toISOString(),
     idempotencyKey: randomUUID(),
+    payment: { method: "SIMULATED_PAYMENT", outcome: "SUCCEED" },
     ...overrides,
   };
 }
 
+export const PLANS = {
+  single: "it_plan_single",
+  starter: "it_plan_starter",
+  fitness: "it_plan_fitness",
+} as const;
+
 const TABLES = [
+  "AiRequestLog",
+  "WorkoutRecommendation",
+  "FitnessGoalTracking",
   "Notification",
+  "PackagePlan",
   "SessionRecord",
   "Payment",
   "PackageLedgerEntry",
@@ -106,16 +122,24 @@ export async function resetAndSeed(db: TestDb) {
         name: c.name,
         email: `${c.userId}@test.example`,
         role: "CUSTOMER" as const,
+        passwordHash: TEST_PASSWORD_HASH,
       })),
       ...[arun, bela].map((t) => ({
         id: t.userId,
         name: t.name,
         email: `${t.userId}@test.example`,
         role: "TRAINER" as const,
+        passwordHash: TEST_PASSWORD_HASH,
       })),
-      { id: idle, name: "Idle Trainer", email: "idle@test.example", role: "TRAINER" },
-      { id: zed, name: "Zed Elsewhere", email: "zed@test.example", role: "TRAINER" },
-      { id: ops.userId, name: ops.name, email: "ops@test.example", role: "OPERATIONS" },
+      { id: idle, name: "Idle Trainer", email: "idle@test.example", role: "TRAINER", passwordHash: TEST_PASSWORD_HASH },
+      { id: zed, name: "Zed Elsewhere", email: "zed@test.example", role: "TRAINER", passwordHash: TEST_PASSWORD_HASH },
+      {
+        id: ops.userId,
+        name: ops.name,
+        email: "ops@test.example",
+        role: "OPERATIONS",
+        passwordHash: TEST_PASSWORD_HASH,
+      },
     ],
   });
   await db.customerProfile.createMany({
@@ -191,6 +215,40 @@ export async function resetAndSeed(db: TestDb) {
         daysOfWeek: [1, 2, 3, 4, 5],
         startMinute: 1020,
         endMinute: 1200,
+      },
+    ],
+  });
+  await db.packagePlan.createMany({
+    data: [
+      {
+        id: PLANS.single,
+        slug: "single-session",
+        name: "Single Session",
+        description: "One session.",
+        sessionCount: 1,
+        price: "399.00",
+        validityDays: 30,
+        sortOrder: 1,
+      },
+      {
+        id: PLANS.starter,
+        slug: "starter-pack",
+        name: "Starter Pack",
+        description: "Five sessions.",
+        sessionCount: 5,
+        price: "1895.00",
+        validityDays: 60,
+        sortOrder: 2,
+      },
+      {
+        id: PLANS.fitness,
+        slug: "fitness-pack",
+        name: "Fitness Pack",
+        description: "Ten sessions.",
+        sessionCount: 10,
+        price: "3590.00",
+        validityDays: 90,
+        sortOrder: 3,
       },
     ],
   });

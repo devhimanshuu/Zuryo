@@ -17,9 +17,9 @@ import { getInstantOffer, getMatches, type MatchResult } from "@/server/booking/
 import { runAction } from "./run";
 
 /*
- * Server actions for the booking flow. Every action resolves the acting user on the server (demo
- * persona cookie, see src/server/auth/actor.ts) and validates its input with Zod; nothing the
- * browser sends is trusted for identity, price, availability or trainer assignment.
+ * Server actions for the booking flow. Every action resolves the acting user from the NextAuth
+ * session (see src/server/auth/actor.ts) and validates its input with Zod; nothing the browser
+ * sends is trusted for identity, price, availability or trainer assignment.
  */
 
 async function withCustomer<T>(
