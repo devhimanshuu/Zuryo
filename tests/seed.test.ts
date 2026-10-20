@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { MAX_ADVANCE_DAYS } from "@/lib/booking/rules";
 import { WORKOUT_CATEGORIES } from "@/lib/validation/enums";
-import { buildSeedPlan } from "../prisma/seed-data";
+import { AVAILABILITY_DAYS, FULL_DAY_TRAINERS, buildSeedPlan } from "../prisma/seed-data";
 
 const ANCHOR = new Date("2026-10-19T04:30:00Z");
 
@@ -106,11 +107,19 @@ describe("seed plan", () => {
     expect([...offered].sort()).toEqual([...WORKOUT_CATEGORIES].sort());
   });
 
-  it("opens availability for every trainer on each of the next seven days", () => {
+  it("opens availability for every trainer on each day of the booking horizon", () => {
     for (const t of plan.trainers) {
       const windows = plan.availability.filter((a) => a.trainerId === t.id && a.status === "AVAILABLE");
-      expect(windows.length).toBe(14);
+      const perDay = (FULL_DAY_TRAINERS as readonly string[]).includes(t.id) ? 3 : 2;
+      expect(windows.length).toBe(AVAILABILITY_DAYS * perDay);
     }
+    expect(AVAILABILITY_DAYS).toBe(MAX_ADVANCE_DAYS);
+  });
+
+  it("keeps at least one trainer available all afternoon so instant booking can be demoed", () => {
+    const arjunMidday = plan.availability.filter((a) => a.id.startsWith("seed_av_arjun_") && a.id.endsWith("_mid"));
+    expect(arjunMidday).toHaveLength(AVAILABILITY_DAYS);
+    expect(new Set(plan.availability.map((a) => a.id)).size).toBe(plan.availability.length);
   });
 
   it("never double-books a trainer", () => {

@@ -8,6 +8,7 @@ import { Notice } from "@/components/shared/states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DEMO_PASSWORD } from "@/lib/auth/demo-password";
 import { ROLE_HOME, type Role } from "@/lib/validation/enums";
 import { cn } from "@/lib/utils/cn";
 
@@ -26,8 +27,6 @@ const DEMO_ACCOUNTS: Array<{ role: Role; name: string; email: string }> = [
   { role: "TRAINER", name: "Kavya Rao", email: "kavya.rao@demo.zuryo.example" },
   { role: "OPERATIONS", name: "Neha Kapoor", email: "neha.kapoor@demo.zuryo.example" },
 ];
-
-export const DEMO_PASSWORD = "password123";
 
 /** Email + password sign-in. Credentials go only to the NextAuth credentials endpoint. */
 export function SignInForm() {

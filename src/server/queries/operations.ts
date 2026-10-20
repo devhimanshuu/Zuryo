@@ -8,6 +8,7 @@ export async function getOperationsOverview() {
     db.booking.findMany({
       where: { trainerId: null, status: "PENDING" },
       orderBy: { startAt: "asc" },
+      take: 20,
       include: {
         customer: { include: { user: { select: { name: true } } } },
         serviceZone: { select: { name: true } },
@@ -29,6 +30,7 @@ export async function getOperationsOverview() {
 export async function getOperationsBookings() {
   return getDb().booking.findMany({
     orderBy: { startAt: "desc" },
+    take: 200,
     include: {
       customer: { include: { user: { select: { name: true } } } },
       trainer: { include: { user: { select: { name: true } } } },
@@ -43,6 +45,7 @@ export async function getOperationsBookings() {
 export async function getOperationsTrainers(now = new Date()) {
   return getDb().trainerProfile.findMany({
     orderBy: { user: { name: "asc" } },
+    take: 100,
     include: {
       user: { select: { name: true, email: true } },
       serviceZone: { select: { name: true } },

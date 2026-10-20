@@ -35,6 +35,7 @@ export async function getTrainerSessions(userId: string) {
     // Declined-payment bookings never became sessions, so trainers don't see them.
     where: { trainerId: userId, status: { not: "FAILED" } },
     orderBy: { startAt: "desc" },
+    take: 200,
     include: {
       ...bookingInclude,
       sessionRecord: { select: { startedAt: true, endsAt: true, completedAt: true, completionSource: true } },

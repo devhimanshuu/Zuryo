@@ -7,6 +7,7 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, type BookingStatus, type Prisma } from "@prisma/client";
 import { hashSync } from "bcryptjs";
+import { DEMO_PASSWORD } from "../src/lib/auth/demo-password";
 import { pgPoolConfig } from "../src/lib/db/pool";
 import { buildSeedPlan } from "./seed-data";
 
@@ -23,8 +24,6 @@ if (!process.env.DATABASE_URL) {
 
 const db = new PrismaClient({ adapter: new PrismaPg(pgPoolConfig(process.env.DATABASE_URL)) });
 
-/** The shared demo password. Printed by the seed and shown on the sign-in page; this is demo data. */
-export const DEMO_PASSWORD = "password123";
 const DEMO_PASSWORD_HASH = hashSync(DEMO_PASSWORD, 10);
 
 /** Statuses that hold a slot. Must match the predicate of the overlap constraints in the migrations. */
@@ -129,20 +128,20 @@ async function main() {
         await tx.peakWindow.upsert({ where: { id: w.id }, create: { id: w.id, ...data }, update: data });
       }
 
-      for (const a of plan.availability) {
-        const data = {
+      // Seeded windows are replaced wholesale (two statements instead of one upsert per row: the
+      // month of availability is ~330 rows and the database can be a long round trip away). Only
+      // rows with seed ids are touched; windows trainers created in the app are left alone.
+      await tx.trainerAvailability.deleteMany({ where: { id: { startsWith: "seed_av_" } } });
+      await tx.trainerAvailability.createMany({
+        data: plan.availability.map((a) => ({
+          id: a.id,
           trainerId: a.trainerId,
           startAt: a.startAt,
           endAt: a.endAt,
           status: a.status,
           note: a.note,
-        };
-        await tx.trainerAvailability.upsert({
-          where: { id: a.id },
-          create: { id: a.id, ...data },
-          update: data,
-        });
-      }
+        })),
+      });
 
       for (const pp of plan.packagePlans) {
         const data = {

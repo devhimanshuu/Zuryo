@@ -170,6 +170,17 @@ export const TRAINERS = [
   },
 ] as const;
 
+/**
+ * Days of trainer availability the seed opens, starting today. Matches the 30-day booking horizon,
+ * so a deployment seeded once stays bookable for a month (re-running the seed rolls it forward).
+ */
+export const AVAILABILITY_DAYS = 30;
+/**
+ * Trainers who also work 12:00–16:00, so an instant booking for their categories can be demoed in
+ * the afternoon. Everyone else keeps a split shift, which leaves gaps that show no-trainer handling.
+ */
+export const FULL_DAY_TRAINERS = ["seed_user_arjun"] as const;
+
 export const OPERATIONS_USER = {
   id: "seed_user_neha",
   name: "Neha Kapoor",
@@ -533,7 +544,7 @@ export function buildSeedPlan(anchor: Date) {
   });
 
   const availability = TRAINERS.flatMap((t) =>
-    Array.from({ length: 7 }, (_, d) => [
+    Array.from({ length: AVAILABILITY_DAYS }, (_, d) => [
       {
         id: `seed_av_${t.id.slice(10)}_d${d}_am`,
         trainerId: t.id,
@@ -542,6 +553,18 @@ export function buildSeedPlan(anchor: Date) {
         status: "AVAILABLE" as AvailabilityStatus,
         note: null as string | null,
       },
+      ...((FULL_DAY_TRAINERS as readonly string[]).includes(t.id)
+        ? [
+            {
+              id: `seed_av_${t.id.slice(10)}_d${d}_mid`,
+              trainerId: t.id,
+              startAt: at(d, 12),
+              endAt: at(d, 16),
+              status: "AVAILABLE" as AvailabilityStatus,
+              note: null as string | null,
+            },
+          ]
+        : []),
       {
         id: `seed_av_${t.id.slice(10)}_d${d}_pm`,
         trainerId: t.id,
@@ -716,6 +739,7 @@ export function buildSeedPlan(anchor: Date) {
     customerName: "Priya Sharma",
     goal: "STRENGTH" as const,
     level: "INTERMEDIATE" as const,
+    age: 32,
     intensity: "MODERATE",
     environment: "HOME",
     equipment: ["MAT", "DUMBBELLS"],
@@ -730,6 +754,7 @@ export function buildSeedPlan(anchor: Date) {
       { category: "STRENGTH" as const, completedAt: at(-6, 11).toISOString() },
       { category: "CARDIO" as const, completedAt: at(-2, 19).toISOString() },
     ],
+    latestTrainerSuggestion: null,
     categoryCounts: { STRENGTH: 2, CARDIO: 1 },
     recentFeedback: [],
   };

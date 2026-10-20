@@ -58,6 +58,7 @@ export async function getCustomerPackages(db: DbOrTx, customerId: string, now: D
   const rows = await db.package.findMany({
     where: { customerId, status: { not: "CANCELLED" } },
     orderBy: [{ purchasedAt: "desc" }],
+    take: 20,
     include: {
       plan: { select: { slug: true } },
       entries: {

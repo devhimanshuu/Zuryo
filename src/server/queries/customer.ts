@@ -60,9 +60,12 @@ export async function getCustomerHome(userId: string, now = new Date()) {
 }
 
 export async function getCustomerBookings(userId: string) {
+  // Latest-first with a generous cap: the list is a demo-scale history view, not an archive.
+  // True pagination is a later product decision; the cap keeps the query bounded as data grows.
   return getDb().booking.findMany({
     where: { customerId: userId },
     orderBy: { startAt: "desc" },
+    take: 200,
     include: customerBookingInclude,
   });
 }
