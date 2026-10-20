@@ -183,6 +183,27 @@ describe("recommendation generation", () => {
     expect(await db.workoutRecommendation.count({ where: { customerId: alice.userId } })).toBe(1);
   });
 
+  it("two simultaneous generation requests cannot store duplicate recommendations", async () => {
+    await saveFitnessProfile(testDeps(db), alice, PROFILE);
+    let providerCalls = 0;
+    const ai = fakeAi(async (ctx) => {
+      providerCalls += 1;
+      // Give both requests time to pass the pre-lock cooldown check before either stores.
+      await new Promise((r) => setTimeout(r, 300));
+      return buildRuleBasedRecommendation(ctx);
+    });
+    const [a, b] = await Promise.all([
+      generateRecommendation(fitnessDeps(ai), alice, { goal: "STRENGTH" }),
+      generateRecommendation(fitnessDeps(ai), alice, { goal: "STRENGTH" }),
+    ]);
+    // The advisory lock serializes the final check + insert: one succeeds, the other backs off.
+    expect([a.ok, b.ok].filter(Boolean)).toHaveLength(1);
+    const loser = a.ok ? b : a;
+    if (!loser.ok) expect(loser.error.code).toBe("CONFLICT");
+    expect(await db.workoutRecommendation.count({ where: { customerId: alice.userId } })).toBe(1);
+    expect(providerCalls).toBeLessThanOrEqual(2); // never a cascade of retries
+  });
+
   it("refuses goals the customer hasn't selected", async () => {
     await saveFitnessProfile(testDeps(db), alice, PROFILE);
     const ai = fakeAi(async (ctx) => buildRuleBasedRecommendation(ctx));
