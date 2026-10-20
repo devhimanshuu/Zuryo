@@ -1,6 +1,10 @@
 import "server-only";
 import { z } from "zod";
 
+/** An optional variable where an empty string (`KEY=""`, as in .env.example) means "not set". */
+const optional = <T extends z.ZodType>(schema: T) =>
+  z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), schema.optional());
+
 /**
  * Server-only environment. Importing this file from a client component fails the build
  * (via `server-only`), so secrets can never reach the browser bundle.
@@ -11,13 +15,19 @@ const serverEnvSchema = z.object({
     .string({ error: "DATABASE_URL is missing. Copy .env.example to .env and add your Neon pooled URL." })
     .url("DATABASE_URL must be a postgres:// or postgresql:// URL.")
     .refine((v) => /^postgres(ql)?:\/\//.test(v), "DATABASE_URL must start with postgresql://"),
-  DIRECT_URL: z.string().url().optional(),
+  DIRECT_URL: optional(z.string().url()),
   /** Bearer token for /api/cron/session-lifecycle. Unset = the endpoint is disabled. */
-  CRON_SECRET: z.string().min(16, "CRON_SECRET must be at least 16 characters").optional(),
-  /** Anthropic API key for AI workout recommendations. Unset = the deterministic fallback is used. */
-  ANTHROPIC_API_KEY: z.string().optional(),
-  /** Model id for recommendations, e.g. claude-3-5-haiku-latest. */
-  ANTHROPIC_MODEL: z.string().min(1).default("claude-3-5-haiku-latest"),
+  CRON_SECRET: optional(z.string().min(16, "CRON_SECRET must be at least 16 characters")),
+  /**
+   * AI workout recommendations. OPENROUTER_API_KEY wins when both keys are set; with neither, every
+   * recommendation uses the deterministic rule-based fallback (labelled as such in the UI).
+   */
+  OPENROUTER_API_KEY: optional(z.string()),
+  /** OpenRouter model id, or a comma-separated fallback list (default: see src/lib/ai/provider.ts). */
+  OPENROUTER_MODEL: optional(z.string()),
+  ANTHROPIC_API_KEY: optional(z.string()),
+  /** Anthropic model id; defaults to claude-haiku-5-5. */
+  ANTHROPIC_MODEL: optional(z.string()),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
