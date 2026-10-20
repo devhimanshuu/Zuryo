@@ -1,4 +1,10 @@
-import type { EquipmentOption, FitnessGoal, WorkoutEnvironment, WorkoutIntensity } from "@/lib/validation/enums";
+import type {
+  EquipmentOption,
+  FitnessGoal,
+  WorkoutEnvironment,
+  WorkoutIntensity,
+  WorkoutPreference,
+} from "@/lib/validation/enums";
 
 /** Human labels for the fitness domain enums. */
 
@@ -32,6 +38,17 @@ export const EQUIPMENT_LABELS: Record<EquipmentOption, string> = {
   KETTLEBELL: "Kettlebell",
   SKIPPING_ROPE: "Skipping rope",
   STATIONARY_BIKE: "Stationary bike",
+};
+
+export const PREFERENCE_LABELS: Record<WorkoutPreference, string> = {
+  MORNING: "Mornings",
+  EVENING: "Evenings",
+  LOW_IMPACT: "Low impact",
+  HIGH_INTENSITY: "High intensity",
+  YOGA: "Yoga",
+  BODYWEIGHT: "Bodyweight",
+  WEIGHTS: "Weights",
+  OUTDOOR: "Outdoors",
 };
 
 export const goalLabel = (g: FitnessGoal) => GOAL_LABELS[g];

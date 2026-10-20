@@ -6,7 +6,9 @@ import { defaultDeps } from "@/server/booking/deps";
 import type { ServiceResult } from "@/server/booking/errors";
 import {
   completeSession,
+  saveSessionSummary,
   startSession,
+  submitSessionFeedback,
   syncSessionForTrainer,
   type SessionState,
 } from "@/server/sessions/session-service";
@@ -44,6 +46,26 @@ export async function syncSessionAction(input: unknown): Promise<ServiceResult<S
   return runAction("sessions:sync", async () => {
     const result = await syncSessionForTrainer(defaultDeps(), await getActor("TRAINER"), input);
     if (result.ok && result.data.changed) revalidateSessionViews();
+    return result;
+  });
+}
+
+/** The assigned trainer saves activities, notes and the suggested next workout. */
+export async function saveSessionSummaryAction(
+  input: unknown,
+): Promise<ServiceResult<{ bookingId: string; activities: number }>> {
+  return runAction("sessions:summary", async () => {
+    const result = await saveSessionSummary(defaultDeps(), await getActor("TRAINER"), input);
+    if (result.ok) revalidateSessionViews();
+    return result;
+  });
+}
+
+/** The customer's feedback on one of their completed sessions. */
+export async function submitSessionFeedbackAction(input: unknown): Promise<ServiceResult<{ bookingId: string }>> {
+  return runAction("sessions:feedback", async () => {
+    const result = await submitSessionFeedback(defaultDeps(), await getActor("CUSTOMER"), input);
+    if (result.ok) revalidateSessionViews();
     return result;
   });
 }

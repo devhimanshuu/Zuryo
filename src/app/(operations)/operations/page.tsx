@@ -143,6 +143,17 @@ export default async function OperationsOverviewPage() {
                 <dd className="text-heading-lg font-semibold tabular">{ai.aiFailed}</dd>
               </div>
             </dl>
+            <p className="mt-3 text-body-sm text-ink-muted">
+              {ai.measured.calls > 0
+                ? `Measured over ${ai.measured.calls} AI call${ai.measured.calls === 1 ? "" : "s"}: ${(
+                    (ai.measured.avgLatencyMs ?? 0) / 1000
+                  ).toFixed(1)} s average latency${
+                    ai.measured.avgInputTokens !== null && ai.measured.avgOutputTokens !== null
+                      ? `, ${ai.measured.avgInputTokens} input / ${ai.measured.avgOutputTokens} output tokens on average`
+                      : ""
+                  }.`
+                : "No AI call has been measured yet."}
+            </p>
             {ai.recentFailures.length > 0 ? (
               <ul className="mt-3 grid gap-1 border-t border-hairline pt-3">
                 {ai.recentFailures.map((f, i) => (

@@ -2,7 +2,7 @@ import { ArrowRight, Bell, CalendarDays } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
-import { ErrorState, EmptyState, PhaseNote } from "@/components/shared/states";
+import { ErrorState, EmptyState } from "@/components/shared/states";
 import { Metric } from "@/components/shared/metric";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScheduleRow } from "@/features/bookings/schedule-row";
@@ -155,7 +155,6 @@ export default async function TrainerOverviewPage() {
         </Card>
       ) : null}
 
-      <PhaseNote>Session notes, activities and workout summaries for the customer arrive in a later phase.</PhaseNote>
     </div>
   );
 }

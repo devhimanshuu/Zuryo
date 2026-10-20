@@ -11,7 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { EQUIPMENT_LABELS, ENVIRONMENT_LABELS, GOAL_LABELS, INTENSITY_LABELS } from "@/lib/fitness/labels";
+import {
+  EQUIPMENT_LABELS,
+  ENVIRONMENT_LABELS,
+  GOAL_LABELS,
+  INTENSITY_LABELS,
+  PREFERENCE_LABELS,
+} from "@/lib/fitness/labels";
 import { cn } from "@/lib/utils/cn";
 import {
   EQUIPMENT_OPTIONS,
@@ -19,15 +25,21 @@ import {
   FITNESS_LEVELS,
   WORKOUT_ENVIRONMENTS,
   WORKOUT_INTENSITIES,
+  WORKOUT_PREFERENCES,
   type EquipmentOption,
   type FitnessGoal,
   type WorkoutEnvironment,
   type WorkoutIntensity,
+  type WorkoutPreference,
 } from "@/lib/validation/enums";
-import { fitnessProfileSchema, type FitnessProfileInput } from "@/lib/validation/fitness";
+import { AGE_RANGE, WEIGHT_KG_RANGE, fitnessProfileSchema, type FitnessProfileInput } from "@/lib/validation/fitness";
 import { saveFitnessProfileAction } from "@/server/actions/fitness";
 
 export type FitnessProfileDefaults = {
+  age: number | null;
+  /** Kilograms as a decimal string ("72.5"), or null. */
+  weightKg: string | null;
+  workoutPreferences: WorkoutPreference[];
   level: string | null;
   goals: FitnessGoal[];
   goalDetails: Partial<Record<FitnessGoal, { target: string; targetDate: string; status: "ACTIVE" | "COMPLETED" }>>;
@@ -57,6 +69,9 @@ export function FitnessProfileForm({ defaults }: { defaults: FitnessProfileDefau
   const form = useForm<FitnessProfileInput>({
     resolver: zodResolver(fitnessProfileSchema),
     defaultValues: {
+      age: defaults.age ?? "",
+      weightKg: defaults.weightKg ?? "",
+      workoutPreferences: defaults.workoutPreferences,
       fitnessLevel: defaults.level as FitnessProfileInput["fitnessLevel"],
       fitnessGoals: defaults.goals,
       goals: Object.fromEntries(
@@ -103,6 +118,76 @@ export function FitnessProfileForm({ defaults }: { defaults: FitnessProfileDefau
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} method="post" noValidate className="grid gap-6">
+      <fieldset className="grid gap-4 rounded-lg border border-hairline bg-raised p-5">
+        <legend className="px-1 font-semibold">About you</legend>
+        <p className="text-body-sm text-ink-muted">
+          Optional. Age helps keep recommendations appropriately conservative; weight is for your own
+          progress record and is never sent to the AI provider.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <Label htmlFor="pf-age">Age</Label>
+            <Input
+              id="pf-age"
+              type="number"
+              inputMode="numeric"
+              min={AGE_RANGE.min}
+              max={AGE_RANGE.max}
+              placeholder="e.g. 32"
+              {...form.register("age")}
+            />
+            {fieldError(errors.age?.message)}
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="pf-weight">Weight (kg)</Label>
+            <Input
+              id="pf-weight"
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              min={WEIGHT_KG_RANGE.min}
+              max={WEIGHT_KG_RANGE.max}
+              placeholder="e.g. 68.5"
+              {...form.register("weightKg")}
+            />
+            {fieldError(errors.weightKg?.message)}
+          </div>
+        </div>
+        <div className="grid gap-2">
+          <p className="text-body-sm font-semibold">Workout preferences</p>
+          <Controller
+            control={form.control}
+            name="workoutPreferences"
+            render={({ field: f }) => (
+              <div role="group" aria-label="Workout preferences" className="flex flex-wrap gap-2">
+                {WORKOUT_PREFERENCES.map((p) => {
+                  const on = f.value?.includes(p) ?? false;
+                  return (
+                    <label
+                      key={p}
+                      className={cn(
+                        "cursor-pointer rounded-full border px-3.5 py-1.5 text-body-sm font-semibold",
+                        on ? "border-brand bg-brand-soft text-brand" : "border-hairline bg-raised text-ink-muted hover:text-ink",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={on}
+                        onChange={() =>
+                          f.onChange(on ? (f.value ?? []).filter((x) => x !== p) : [...(f.value ?? []), p])
+                        }
+                      />
+                      {PREFERENCE_LABELS[p]}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          />
+        </div>
+      </fieldset>
+
       <div className="grid gap-5 lg:grid-cols-2">
         <fieldset className="grid content-start gap-4 rounded-lg border border-hairline bg-raised p-5">
           <legend className="px-1 font-semibold">Experience & intensity</legend>

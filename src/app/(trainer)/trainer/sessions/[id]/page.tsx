@@ -5,11 +5,13 @@ import { notFound } from "next/navigation";
 import { ErrorState } from "@/components/shared/states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SessionConsole } from "@/features/sessions/session-console";
+import { SessionSummaryForm } from "@/features/sessions/session-summary-form";
 import { categoryLabel } from "@/lib/booking/categories";
 import { startWindow } from "@/lib/sessions/lifecycle";
 import { GOAL_LABELS } from "@/lib/fitness/labels";
 import { safely } from "@/lib/utils/errors";
 import { formatSlot, formatTime, titleCase } from "@/lib/utils/format";
+import { actualDurationMinutes, parseActivities } from "@/lib/validation/sessions";
 import { getActor } from "@/server/auth/actor";
 import { defaultDeps } from "@/server/booking/deps";
 import { getSessionForTrainer } from "@/server/sessions/session-service";
@@ -108,9 +110,26 @@ export default async function TrainerSessionPage({ params }: { params: Promise<{
             <p className="text-body-sm text-ink-muted">
               {b.package ? `Covered by the customer's ${b.package.name}.` : b.payments.length ? "Paid per session (simulated)." : "No payment recorded."}
             </p>
+            {s?.completedAt ? (
+              <p className="text-body-sm text-ink-muted">
+                Ran {actualDurationMinutes(s.startedAt, s.completedAt)} minutes (server timestamps).
+              </p>
+            ) : null}
           </CardContent>
         </Card>
       </div>
+
+      {s && (b.status === "IN_PROGRESS" || b.status === "COMPLETED") ? (
+        <SessionSummaryForm
+          bookingId={b.id}
+          defaults={{
+            activities: parseActivities(s.activities),
+            trainerNotes: s.trainerNotes,
+            suggestedNextWorkout: s.suggestedNextWorkout,
+          }}
+          customerFeedback={s.customerFeedback}
+        />
+      ) : null}
     </div>
   );
 }

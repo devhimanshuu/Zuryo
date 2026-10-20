@@ -15,17 +15,18 @@ import Link from "next/link";
 import { FitnessImage } from "@/components/shared/fitness-image";
 import { Button } from "@/components/ui/button";
 import { IMAGES } from "@/lib/config/images";
+import MarketingLayout from "./(marketing)/layout";
 
-export default function LandingPage() {
+export default function HomePage() {
   return (
-    <>
+    <MarketingLayout>
       <Hero />
       <HowItWorks />
       <InstantOrScheduled />
       <Benefits />
       <TrainerPreview />
       <FinalCta />
-    </>
+    </MarketingLayout>
   );
 }
 

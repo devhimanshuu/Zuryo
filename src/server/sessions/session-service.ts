@@ -12,6 +12,7 @@ import {
   type SessionClock,
 } from "@/lib/sessions/lifecycle";
 import { formatTime } from "@/lib/utils/format";
+import { sessionFeedbackSchema, sessionSummarySchema } from "@/lib/validation/sessions";
 import type { Actor } from "@/server/auth/actor";
 import type { BookingDeps, DbOrTx } from "@/server/booking/deps";
 import { fail, ok, type ServiceResult } from "@/server/booking/errors";
@@ -347,4 +348,76 @@ export async function syncSessionForTrainer(
   const r = await reconcileSession(deps, owned.id);
   const state = await readState(deps.db, owned.id, deps.now());
   return state ? ok({ ...state, changed: r.warned || r.completed }) : fail("NOT_FOUND", "We couldn't find that session.");
+}
+
+// ─── Session records: the trainer's summary and the customer's feedback ─────
+
+/**
+ * The assigned trainer records what happened: activities, notes for the customer and a suggested
+ * next workout. Allowed once the session has started (in progress or completed) and editable
+ * afterwards; the timestamps stay server-owned and are never part of this input.
+ */
+export async function saveSessionSummary(
+  deps: BookingDeps,
+  actor: Actor,
+  raw: unknown,
+): Promise<ServiceResult<{ bookingId: string; activities: number }>> {
+  if (actor.role !== "TRAINER") return fail("FORBIDDEN", "Only the assigned trainer can write the session summary.");
+  const parsed = sessionSummarySchema.safeParse(raw);
+  if (!parsed.success) {
+    return fail("VALIDATION", parsed.error.issues[0]?.message ?? "Check the session summary.", {
+      issues: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+    });
+  }
+  const input = parsed.data;
+  const booking = await deps.db.booking.findFirst({
+    where: { id: input.bookingId, trainerId: actor.userId },
+    select: { id: true, status: true, sessionRecord: { select: { id: true } } },
+  });
+  if (!booking) return fail("NOT_FOUND", "We couldn't find that session.");
+  if (!booking.sessionRecord || (booking.status !== "IN_PROGRESS" && booking.status !== "COMPLETED")) {
+    return fail("CONFLICT", "Start the session before writing its summary.");
+  }
+  await deps.db.sessionRecord.update({
+    where: { id: booking.sessionRecord.id },
+    data: {
+      activities: input.activities as Prisma.InputJsonValue,
+      trainerNotes: input.trainerNotes ?? null,
+      suggestedNextWorkout: input.suggestedNextWorkout ?? null,
+    },
+  });
+  return ok({ bookingId: booking.id, activities: input.activities.length });
+}
+
+/** The customer leaves (or edits) feedback on one of their own completed sessions. */
+export async function submitSessionFeedback(
+  deps: BookingDeps,
+  actor: Actor,
+  raw: unknown,
+): Promise<ServiceResult<{ bookingId: string }>> {
+  if (actor.role !== "CUSTOMER") return fail("FORBIDDEN", "Only the customer can give feedback on a session.");
+  const parsed = sessionFeedbackSchema.safeParse(raw);
+  if (!parsed.success) {
+    return fail("VALIDATION", parsed.error.issues[0]?.message ?? "Check your feedback.", {
+      fieldErrors: { feedback: parsed.error.issues.map((i) => i.message) },
+    });
+  }
+  // Scoped to the acting customer and to completed sessions in one conditional update, so another
+  // customer's booking id or an unfinished session simply matches nothing.
+  const res = await deps.db.sessionRecord.updateMany({
+    where: {
+      bookingId: parsed.data.bookingId,
+      completedAt: { not: null },
+      booking: { customerId: actor.userId, status: "COMPLETED" },
+    },
+    data: { customerFeedback: parsed.data.feedback },
+  });
+  if (res.count === 1) return ok({ bookingId: parsed.data.bookingId });
+  const owned = await deps.db.booking.findFirst({
+    where: { id: parsed.data.bookingId, customerId: actor.userId },
+    select: { id: true },
+  });
+  return owned
+    ? fail("CONFLICT", "You can leave feedback once the session is completed.")
+    : fail("NOT_FOUND", "We couldn't find that session.");
 }

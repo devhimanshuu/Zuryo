@@ -1,5 +1,6 @@
 import { Dumbbell, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState, ErrorState } from "@/components/shared/states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,19 +9,24 @@ import { GenerateRecommendationButton } from "@/features/fitness/generate-button
 import { RecommendationCard } from "@/features/fitness/recommendation-card";
 import { categoryLabel } from "@/lib/booking/categories";
 import { recommendationOutputSchema } from "@/lib/fitness/recommendation-schema";
-import { EQUIPMENT_LABELS, ENVIRONMENT_LABELS, GOAL_LABELS, INTENSITY_LABELS } from "@/lib/fitness/labels";
+import {
+  EQUIPMENT_LABELS,
+  ENVIRONMENT_LABELS,
+  GOAL_LABELS,
+  INTENSITY_LABELS,
+  PREFERENCE_LABELS,
+} from "@/lib/fitness/labels";
 import { safely } from "@/lib/utils/errors";
-import { formatSlot, titleCase } from "@/lib/utils/format";
+import { formatDay, formatSlot, titleCase } from "@/lib/utils/format";
 import { getDb } from "@/lib/db";
 import type { FitnessGoal, WorkoutCategory } from "@/lib/validation/enums";
+import { actualDurationMinutes, parseActivities, type SessionActivity } from "@/lib/validation/sessions";
 import { getActor } from "@/server/auth/actor";
 import { getFitnessDashboard } from "@/server/fitness/fitness-service";
 
 export const metadata: Metadata = { title: "Fitness" };
 
-type Activity = { name?: string; sets?: number; reps?: number; durationMin?: number; durationSec?: number };
-
-function describe(a: Activity) {
+function describe(a: SessionActivity) {
   const parts = [a.sets && a.reps ? `${a.sets} × ${a.reps}` : a.sets ? `${a.sets} sets` : null];
   if (a.durationMin) parts.push(`${a.durationMin} min`);
   if (a.durationSec) parts.push(`${a.durationSec}s`);
@@ -78,6 +84,10 @@ export default async function FitnessPage() {
             <CardContent className="grid gap-3">
               {profile ? (
                 <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-body-md">
+                  <dt className="text-ink-muted">Age</dt>
+                  <dd className="font-semibold">{profile.age ?? "Not set"}</dd>
+                  <dt className="text-ink-muted">Weight</dt>
+                  <dd className="font-semibold">{profile.weightKg ? `${profile.weightKg.toString()} kg` : "Not set"}</dd>
                   <dt className="text-ink-muted">Level</dt>
                   <dd className="font-semibold">{profile.fitnessLevel ? titleCase(profile.fitnessLevel) : "Not set"}</dd>
                   <dt className="text-ink-muted">Intensity</dt>
@@ -91,6 +101,12 @@ export default async function FitnessPage() {
                   <dt className="text-ink-muted">Equipment</dt>
                   <dd className="font-semibold">
                     {profile.equipment.length ? profile.equipment.map((e) => EQUIPMENT_LABELS[e]).join(", ") : "None listed"}
+                  </dd>
+                  <dt className="text-ink-muted">Prefers</dt>
+                  <dd className="font-semibold">
+                    {profile.workoutPreferences.length
+                      ? profile.workoutPreferences.map((p) => PREFERENCE_LABELS[p]).join(", ")
+                      : "None listed"}
                   </dd>
                 </dl>
               ) : (
@@ -132,7 +148,7 @@ export default async function FitnessPage() {
                         </div>
                         {detail?.target ? <p className="text-body-sm text-ink-muted">Target: {detail.target}</p> : null}
                         {detail?.targetDate ? (
-                          <p className="text-body-sm text-ink-muted">By {formatSlot(detail.targetDate)}</p>
+                          <p className="text-body-sm text-ink-muted">By {formatDay(detail.targetDate)}</p>
                         ) : null}
                       </li>
                     );
@@ -224,6 +240,9 @@ export default async function FitnessPage() {
             </h2>
             <FitnessProfileForm
               defaults={{
+                age: profile?.age ?? null,
+                weightKg: profile?.weightKg ? profile.weightKg.toString() : null,
+                workoutPreferences: profile?.workoutPreferences ?? [],
                 level: profile?.fitnessLevel ?? null,
                 goals: activeGoals,
                 goalDetails: Object.fromEntries(
@@ -261,12 +280,14 @@ export default async function FitnessPage() {
             ) : (
               <ol className="mt-4 grid gap-0 border-l border-hairline">
                 {sessions.map((s) => {
-                  const activities = (Array.isArray(s.activities) ? s.activities : []) as Activity[];
+                  const activities = parseActivities(s.activities);
+                  const minutes = actualDurationMinutes(s.startedAt, s.completedAt);
                   return (
                     <li key={s.id} className="relative pb-8 pl-6 last:pb-0">
                       <span className="absolute top-1.5 -left-[5px] size-2.5 rounded-full bg-brand" aria-hidden />
                       <p className="text-body-sm text-ink-muted">
                         {formatSlot(s.startedAt)} · with {s.booking.trainer?.user.name ?? "trainer"}
+                        {minutes !== null ? ` · ${minutes} min` : ""}
                       </p>
                       <ul className="mt-2 flex flex-wrap gap-2">
                         {activities.map((a, i) => (
@@ -288,6 +309,20 @@ export default async function FitnessPage() {
                           {s.suggestedNextWorkout}
                         </p>
                       ) : null}
+                      <p className="mt-2 text-body-sm">
+                        {s.customerFeedback ? (
+                          <>
+                            <span className="font-semibold">Your feedback: </span>
+                            {s.customerFeedback}{" "}
+                          </>
+                        ) : null}
+                        <Link
+                          href={`/customer/bookings/${s.bookingId}`}
+                          className="font-semibold text-brand hover:underline"
+                        >
+                          {s.customerFeedback ? "Edit" : "Leave feedback"}
+                        </Link>
+                      </p>
                     </li>
                   );
                 })}

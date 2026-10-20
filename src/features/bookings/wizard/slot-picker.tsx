@@ -14,6 +14,7 @@ const DISABLED_LABEL: Record<Exclude<SlotStatus, "AVAILABLE">, string> = {
   TOO_FAR: "Too far ahead",
   YOU_ARE_BOOKED: "You're booked",
   UNAVAILABLE: "No trainer",
+  PRICE_DIFFERS: "Other price",
 };
 
 const DISABLED_SR: Record<Exclude<SlotStatus, "AVAILABLE">, string> = {
@@ -22,6 +23,7 @@ const DISABLED_SR: Record<Exclude<SlotStatus, "AVAILABLE">, string> = {
   TOO_FAR: "too far ahead to book",
   YOU_ARE_BOOKED: "you already have a session at this time",
   UNAVAILABLE: "no trainer is free",
+  PRICE_DIFFERS: "costs a different amount than you paid",
 };
 
 function dayLabels(day: DaySchedule, todayKey: string, tz: string) {

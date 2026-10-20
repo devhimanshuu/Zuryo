@@ -1,7 +1,14 @@
 import "server-only";
 import { z } from "zod";
-import { AiProviderError, anthropicProvider, type AiProvider } from "@/lib/ai/provider";
-import { cooldownRemainingMs, CONTEXT_MAX_FEEDBACK, CONTEXT_MAX_RECENT_SESSIONS, type RecommendationContext } from "@/lib/fitness/context";
+import { AiProviderError, aiProviderFromEnv, type AiProvider, type TokenUsage } from "@/lib/ai/provider";
+import { clientEnv } from "@/lib/config/env.client";
+import {
+  cooldownRemainingMs,
+  CONTEXT_MAX_FEEDBACK,
+  CONTEXT_MAX_RECENT_SESSIONS,
+  CONTEXT_MAX_SUGGESTION_CHARS,
+  type RecommendationContext,
+} from "@/lib/fitness/context";
 import { recommendationOutputSchema } from "@/lib/fitness/recommendation-schema";
 import { buildRuleBasedRecommendation, ruleBasedExplanation } from "@/lib/fitness/templates";
 import { getServerEnv } from "@/lib/config/env.server";
@@ -27,7 +34,7 @@ export function defaultFitnessDeps(): FitnessDeps {
     db: getDb(),
     now: () => new Date(),
     tx: { maxWait: 10_000, timeout: 15_000 },
-    ai: anthropicProvider({ apiKey: env.ANTHROPIC_API_KEY || undefined, model: env.ANTHROPIC_MODEL }),
+    ai: aiProviderFromEnv({ ...env, APP_URL: clientEnv.NEXT_PUBLIC_APP_URL }),
   };
 }
 
@@ -122,8 +129,11 @@ export async function saveFitnessProfile(
     await tx.customerProfile.update({
       where: { userId: actor.userId },
       data: {
+        age: input.age ?? null,
+        weightKg: input.weightKg === undefined ? null : Math.round(input.weightKg * 10) / 10,
         fitnessLevel: input.fitnessLevel ?? null,
         fitnessGoals: input.fitnessGoals,
+        workoutPreferences: input.workoutPreferences,
         intensity: input.intensity ?? null,
         equipment: input.equipment,
         environment: input.environment ?? null,
@@ -171,6 +181,7 @@ async function loadRecommendationContext(db: DbOrTx, actor: Actor, goal: Fitness
     db.customerProfile.findUnique({
       where: { userId: actor.userId },
       select: {
+        age: true,
         fitnessLevel: true,
         fitnessGoals: true,
         workoutPreferences: true,
@@ -190,7 +201,7 @@ async function loadRecommendationContext(db: DbOrTx, actor: Actor, goal: Fitness
       take: CONTEXT_MAX_RECENT_SESSIONS,
       select: {
         workoutCategory: true,
-        sessionRecord: { select: { completedAt: true } },
+        sessionRecord: { select: { completedAt: true, suggestedNextWorkout: true } },
         endAt: true,
       },
     }),
@@ -213,6 +224,7 @@ async function loadRecommendationContext(db: DbOrTx, actor: Actor, goal: Fitness
     customerName: profile.user.name,
     goal,
     level: profile.fitnessLevel,
+    age: profile.age,
     intensity: profile.intensity,
     environment: profile.environment,
     equipment: profile.equipment,
@@ -226,6 +238,11 @@ async function loadRecommendationContext(db: DbOrTx, actor: Actor, goal: Fitness
       category: b.workoutCategory as NonNullable<typeof b.workoutCategory>,
       completedAt: (b.sessionRecord?.completedAt ?? b.endAt).toISOString(),
     })),
+    latestTrainerSuggestion:
+      recent.find((b) => b.sessionRecord?.suggestedNextWorkout)?.sessionRecord?.suggestedNextWorkout?.slice(
+        0,
+        CONTEXT_MAX_SUGGESTION_CHARS,
+      ) ?? null,
     categoryCounts,
     recentFeedback: feedback
       .filter((f) => f.feedback !== null)
@@ -255,29 +272,37 @@ export async function generateRecommendation(
   const parsed = generateRecommendationSchema.safeParse(raw);
   if (!parsed.success) return fail("VALIDATION", "Choose one of your goals to generate a workout for.");
 
-  const now = deps.now();
-  const last = await deps.db.workoutRecommendation.findFirst({
-    where: { customerId: actor.userId },
-    orderBy: { createdAt: "desc" },
-    select: { createdAt: true },
-  });
-  const waitMs = cooldownRemainingMs(last?.createdAt ?? null, now);
-  if (waitMs > 0) {
-    return fail("CONFLICT", `Recommendations are limited to one per minute. Try again in ${Math.ceil(waitMs / 1000)}s.`);
-  }
-
   const ctx = await loadRecommendationContext(deps.db, actor, parsed.data.goal);
   if (!ctx) return fail("NOT_FOUND", "Set up your fitness profile first, then generate a workout.");
   if (!ctx.selectedGoals.includes(parsed.data.goal)) {
     return fail("VALIDATION", "That goal isn't on your profile. Pick one of your selected goals.");
   }
 
+  // Cooldown fast path, then the same check again under an advisory lock below. The lock key is per
+  // customer, so two simultaneous requests for the same customer serialize: whoever inserts first
+  // wins, and the loser sees the fresh cooldown and returns CONFLICT instead of storing a duplicate.
+  const lockKey = `zuryo:recommendation:${actor.userId}`;
+  const now = deps.now();
+  const initialWait = cooldownRemainingMs(await latestGenerationAt(deps.db, actor.userId), now);
+  if (initialWait > 0) {
+    return fail("CONFLICT", `Recommendations are limited to one per minute. Try again in ${Math.ceil(initialWait / 1000)}s.`);
+  }
+
   let output: ReturnType<typeof buildRuleBasedRecommendation>;
   let source: RecommendationSource = "AI";
   let modelId: string | null = deps.ai.model;
   let errorKind: string | null = null;
+  let usage: TokenUsage | null = null;
+  // Wall-clock time of the provider call, recorded for honest latency figures (fallback included).
+  const startedMs = Date.now();
   try {
-    output = await deps.ai.generateRecommendation(ctx);
+    // The provider call is deliberately outside any database transaction: it can take seconds and
+    // must not hold a pooled connection (or a lock) open while waiting.
+    output = await deps.ai.generateRecommendation(ctx, {
+      onUsage: (u) => (usage = u),
+      // Under model routing the answering model can differ from the first one configured.
+      onServedBy: (m) => (modelId = m),
+    });
   } catch (err) {
     source = "RULE_BASED";
     modelId = null;
@@ -285,6 +310,8 @@ export async function generateRecommendation(
     // The fallback never fails: it is local and deterministic.
     output = buildRuleBasedRecommendation(ctx);
   }
+  const latencyMs = Date.now() - startedMs;
+  const tokens = usage as TokenUsage | null;
   const payload = recommendationOutputSchema.parse(output);
 
   const preferenceSnapshot = {
@@ -304,6 +331,16 @@ export async function generateRecommendation(
 
   try {
     return await deps.db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+      // Under the lock the cooldown is authoritative: a concurrent request that just stored a
+      // recommendation makes this one back off instead of creating a duplicate.
+      const waitMs = cooldownRemainingMs(await latestGenerationAt(tx, actor.userId), now);
+      if (waitMs > 0) {
+        return fail<GenerationResult>(
+          "CONFLICT",
+          `Recommendations are limited to one per minute. Try again in ${Math.ceil(waitMs / 1000)}s.`,
+        );
+      }
       const rec = await tx.workoutRecommendation.create({
         data: {
           customerId: actor.userId,
@@ -330,6 +367,9 @@ export async function generateRecommendation(
           outcome: "SUCCESS",
           modelId,
           errorKind,
+          latencyMs,
+          inputTokens: tokens?.inputTokens ?? null,
+          outputTokens: tokens?.outputTokens ?? null,
           createdAt: now,
         },
       });
@@ -355,6 +395,7 @@ export async function generateRecommendation(
           outcome: "FAILED",
           modelId,
           errorKind: "INTERNAL",
+          latencyMs,
           createdAt: now,
         },
       });
@@ -363,6 +404,16 @@ export async function generateRecommendation(
     }
     throw err;
   }
+}
+
+/** The most recent generation time for a customer (used by the cooldown checks). */
+async function latestGenerationAt(db: DbOrTx, customerId: string): Promise<Date | null> {
+  const last = await db.workoutRecommendation.findFirst({
+    where: { customerId },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true },
+  });
+  return last?.createdAt ?? null;
 }
 
 /** Grounded explanation for AI rows: states exactly the inputs the model was given, nothing more. */
@@ -432,7 +483,7 @@ export async function setRecommendationStatus(
 
 /** Honest AI usage figures: counts straight from the request log, plus recent failure kinds. */
 export async function getAiUsage(db: DbOrTx) {
-  const [bySource, failures, recent] = await Promise.all([
+  const [bySource, failures, recent, measured] = await Promise.all([
     db.aiRequestLog.groupBy({ by: ["source", "outcome"], _count: { _all: true } }),
     db.aiRequestLog.groupBy({ by: ["errorKind"], where: { errorKind: { not: null } }, _count: { _all: true } }),
     db.aiRequestLog.findMany({
@@ -440,6 +491,12 @@ export async function getAiUsage(db: DbOrTx) {
       orderBy: { createdAt: "desc" },
       take: 5,
       select: { source: true, errorKind: true, createdAt: true },
+    }),
+    // Measured figures for successful AI calls only (fallback rows have no provider tokens).
+    db.aiRequestLog.aggregate({
+      where: { source: "AI", outcome: "SUCCESS", latencyMs: { not: null } },
+      _avg: { latencyMs: true, inputTokens: true, outputTokens: true },
+      _count: { _all: true },
     }),
   ]);
   const count = (source: RecommendationSource, outcome: "SUCCESS" | "FAILED") =>
@@ -450,6 +507,12 @@ export async function getAiUsage(db: DbOrTx) {
     fallback: count("RULE_BASED", "SUCCESS"),
     failuresByKind: failures.map((f) => ({ kind: f.errorKind as string, count: f._count._all })),
     recentFailures: recent.map((r) => ({ source: r.source, kind: r.errorKind, at: r.createdAt })),
+    measured: {
+      calls: measured._count._all,
+      avgLatencyMs: measured._avg.latencyMs === null ? null : Math.round(measured._avg.latencyMs),
+      avgInputTokens: measured._avg.inputTokens === null ? null : Math.round(measured._avg.inputTokens),
+      avgOutputTokens: measured._avg.outputTokens === null ? null : Math.round(measured._avg.outputTokens),
+    },
   };
 }
 

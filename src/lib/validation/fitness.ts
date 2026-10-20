@@ -5,11 +5,27 @@ import {
   fitnessLevelSchema,
   workoutEnvironmentSchema,
   workoutIntensitySchema,
+  workoutPreferenceSchema,
 } from "./enums";
 
 /** Caps for voluntary free-text profile fields. Kept small on purpose: enough to be useful, short
  * enough that the recommendation context never turns into a dump of personal data. */
 export const PROFILE_TEXT_MAX = 300;
+
+/** Bounds for the assessment's body measurements. Adults only; both fields stay optional. */
+export const AGE_RANGE = { min: 16, max: 100 } as const;
+export const WEIGHT_KG_RANGE = { min: 25, max: 250 } as const;
+
+/** Optional number from a form field: "" / null / undefined mean "not given". */
+const optionalNumber = (label: string, range: { min: number; max: number }, integer: boolean) =>
+  z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce
+      .number({ error: `${label} must be a number` })
+      .refine((n) => !integer || Number.isInteger(n), `${label} must be a whole number`)
+      .refine((n) => n >= range.min && n <= range.max, `${label} must be between ${range.min} and ${range.max}`)
+      .optional(),
+  );
 
 const optionalText = (label: string) =>
   z
@@ -22,8 +38,12 @@ const optionalText = (label: string) =>
 /** What the fitness profile form submits. Goals carry optional tracking detail per goal. */
 export const fitnessProfileSchema = z
   .object({
+    age: optionalNumber("Age", AGE_RANGE, true),
+    /** Kilograms, stored to one decimal place. */
+    weightKg: optionalNumber("Weight", WEIGHT_KG_RANGE, false),
     fitnessLevel: fitnessLevelSchema.nullish(),
     fitnessGoals: z.array(fitnessGoalSchema).max(4, "Choose at most 4 goals"),
+    workoutPreferences: z.array(workoutPreferenceSchema).max(8).default([]),
     goals: z
       .record(
         z.string(),

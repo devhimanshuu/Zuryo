@@ -36,11 +36,30 @@ const exerciseSchema = z.discriminatedUnion("kind", [repsExercise, timedExercise
 const bounded = (min: number, max: number, label: string) =>
   z.string().trim().min(min, `${label} is too short`).max(max, `${label} is too long`);
 
+/**
+ * Length limits the model is asked to respect (in the tool schema and the prompt). Validation of
+ * prose fields allows up to PROSE_TOLERANCE times that, so a slightly wordy but otherwise valid plan
+ * isn't thrown away; sizes stay bounded either way. Titles and exercise names keep their exact
+ * limits because the layout depends on them.
+ */
+export const PROSE_LIMITS = {
+  summary: 300,
+  warmup: 200,
+  cooldown: 200,
+  rest: 120,
+  safety: 300,
+  adaptations: 300,
+  nextAction: 200,
+} as const;
+export const PROSE_TOLERANCE = 2;
+const prose = (min: number, field: keyof typeof PROSE_LIMITS, label: string) =>
+  bounded(min, PROSE_LIMITS[field] * PROSE_TOLERANCE, label);
+
 export const recommendationOutputSchema = z
   .object({
     title: bounded(5, 80, "Title"),
     /** One or two sentences describing the workout itself, not marketing copy. */
-    summary: bounded(20, 300, "Summary"),
+    summary: prose(20, "summary", "Summary"),
     category: workoutCategorySchema,
     durationMinutes: z
       .number()
@@ -49,13 +68,13 @@ export const recommendationOutputSchema = z
       .max(60, "Duration must be at most 60 minutes"),
     intensity: workoutIntensitySchema,
     goal: fitnessGoalSchema,
-    warmup: bounded(10, 200, "Warm-up"),
-    cooldown: bounded(10, 200, "Cool-down"),
-    rest: bounded(5, 120, "Rest guidance"),
-    safety: bounded(10, 300, "Safety notes"),
-    adaptations: bounded(10, 300, "Adaptations"),
+    warmup: prose(10, "warmup", "Warm-up"),
+    cooldown: prose(10, "cooldown", "Cool-down"),
+    rest: prose(5, "rest", "Rest guidance"),
+    safety: prose(10, "safety", "Safety notes"),
+    adaptations: prose(10, "adaptations", "Adaptations"),
     /** What to do next in Zuryo, e.g. "Book a STRENGTH session with a trainer nearby." */
-    nextAction: bounded(10, 200, "Next action"),
+    nextAction: prose(10, "nextAction", "Next action"),
     equipment: z.array(equipmentOptionSchema).max(5),
     exercises: z.array(exerciseSchema).min(3, "A workout needs at least 3 exercises").max(8, "A workout has at most 8 exercises"),
   })

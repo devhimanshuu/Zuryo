@@ -7,12 +7,16 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CancelBookingButton } from "@/features/bookings/cancel-booking-button";
+import { RescheduleBookingButton } from "@/features/bookings/reschedule-booking-button";
 import { PriceBreakdown } from "@/features/bookings/price-breakdown";
+import { SessionFeedbackForm } from "@/features/sessions/session-feedback-form";
 import { CANCELLATION_POLICY_NOTE, cancellationBlocker } from "@/lib/booking/cancellation";
 import { categoryLabel } from "@/lib/booking/categories";
+import { RESCHEDULE_POLICY_NOTE, rescheduleBlocker } from "@/lib/booking/reschedule";
 import { coverageSummary } from "@/lib/payments/coverage";
 import { safely } from "@/lib/utils/errors";
 import { formatDay, formatSlot, formatTime } from "@/lib/utils/format";
+import { actualDurationMinutes, parseActivities } from "@/lib/validation/sessions";
 import { getActor } from "@/server/auth/actor";
 import { getBookingForActor } from "@/server/booking/booking-service";
 import { defaultDeps } from "@/server/booking/deps";
@@ -42,6 +46,7 @@ export default async function BookingDetailPage({
   const tz = b.serviceZone.timezone;
   const now = new Date();
   const blocker = cancellationBlocker(b, now);
+  const moveBlocker = rescheduleBlocker(b, now);
   const coverage = coverageSummary(b);
   const payment = b.payments[0];
   const trainerName = b.trainer?.user.name ?? null;
@@ -195,6 +200,8 @@ export default async function BookingDetailPage({
             </Card>
           ) : null}
 
+          {b.sessionRecord?.completedAt ? <SessionSummary booking={b} /> : null}
+
           <Card>
             <CardHeader>
               <CardTitle>Manage</CardTitle>
@@ -216,7 +223,21 @@ export default async function BookingDetailPage({
                   </div>
                 </>
               )}
-              <p className="text-body-sm text-ink-subtle">Rescheduling isn&apos;t available yet.</p>
+              {moveBlocker ? (
+                blocker ? null : <p className="text-body-sm text-ink-muted">{moveBlocker}</p>
+              ) : (
+                <>
+                  <p className="text-body-sm text-ink-muted">{RESCHEDULE_POLICY_NOTE}</p>
+                  <div>
+                    <RescheduleBookingButton bookingId={b.id} reference={b.reference} />
+                  </div>
+                </>
+              )}
+              {b.rescheduleCount > 0 && b.lastRescheduledAt ? (
+                <p className="text-body-sm text-ink-subtle">
+                  Moved {b.rescheduleCount} time{b.rescheduleCount === 1 ? "" : "s"}, last on {formatSlot(b.lastRescheduledAt, tz)}.
+                </p>
+              ) : null}
             </CardContent>
           </Card>
 
@@ -237,5 +258,72 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
       <dt className="text-body-sm text-ink-muted sm:pt-0.5">{label}</dt>
       <dd className="-mt-2 font-semibold break-words sm:mt-0">{children}</dd>
     </>
+  );
+}
+
+type SessionRecordView = {
+  startedAt: Date;
+  completedAt: Date | null;
+  activities: unknown;
+  trainerNotes: string | null;
+  suggestedNextWorkout: string | null;
+  customerFeedback: string | null;
+};
+
+/** The trainer's structured record of a completed session, and the customer's feedback on it. */
+function SessionSummary({
+  booking,
+}: {
+  booking: { id: string; status: string; sessionRecord: SessionRecordView | null };
+}) {
+  const s = booking.sessionRecord!;
+  const activities = parseActivities(s.activities);
+  const minutes = actualDurationMinutes(s.startedAt, s.completedAt);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>What you did</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 text-body-sm">
+        {minutes !== null ? <p className="text-ink-muted">Duration: {minutes} minutes</p> : null}
+        {activities.length > 0 ? (
+          <ul className="grid gap-1.5">
+            {activities.map((a, i) => (
+              <li key={i} className="flex justify-between gap-3">
+                <span className="font-semibold">{a.name}</span>
+                <span className="text-ink-muted tabular">
+                  {[
+                    a.sets && a.reps ? `${a.sets} × ${a.reps}` : a.sets ? `${a.sets} sets` : null,
+                    a.durationMin ? `${a.durationMin} min` : null,
+                    a.durationSec ? `${a.durationSec}s` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-ink-muted">Your trainer hasn&apos;t added the exercises yet.</p>
+        )}
+        {s.trainerNotes ? (
+          <p>
+            <span className="font-semibold">Trainer notes: </span>
+            {s.trainerNotes}
+          </p>
+        ) : null}
+        {s.suggestedNextWorkout ? (
+          <p className="rounded-md bg-sunken px-3 py-2">
+            <span className="font-semibold">Suggested next: </span>
+            {s.suggestedNextWorkout}
+          </p>
+        ) : null}
+        {booking.status === "COMPLETED" ? (
+          <div className="border-t border-hairline pt-3">
+            <SessionFeedbackForm bookingId={booking.id} current={s.customerFeedback} />
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
