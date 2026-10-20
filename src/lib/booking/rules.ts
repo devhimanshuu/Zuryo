@@ -39,6 +39,9 @@ export const SESSION_START_EARLY_MINUTES = 15;
 /** ...until 30 minutes after it. Later than that the booking needs operations' attention. */
 export const SESSION_START_LATE_MINUTES = 30;
 
+/** A booking can be moved to a new time at most this many times; after that, cancel and rebook. */
+export const MAX_RESCHEDULES = 3;
+
 export const NOTES_MAX_LENGTH = 500;
 export const CANCELLATION_REASON_MAX_LENGTH = 280;
 

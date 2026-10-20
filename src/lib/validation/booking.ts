@@ -77,6 +77,26 @@ export const cancelBookingInputSchema = z
 
 export type CancelBookingInput = z.infer<typeof cancelBookingInputSchema>;
 
+/**
+ * Move a booking to a new start time. Only the booking and the new time are sent: the trainer,
+ * price and coverage are re-derived by the server. The new time follows the scheduled-booking rules
+ * (more than an hour ahead, within the booking horizon, on the half-hour grid).
+ */
+export function rescheduleBookingInputSchema(now: () => Date = () => new Date()) {
+  return z
+    .object({
+      bookingId: id,
+      startAt: z.coerce.date({ error: "Choose a new time" }),
+    })
+    .strict()
+    .superRefine((input, ctx) => {
+      const problem = startTimeProblem("SCHEDULED", input.startAt, now());
+      if (problem) ctx.addIssue({ code: "custom", path: ["startAt"], message: problem });
+    });
+}
+
+export const rescheduleOptionsQuerySchema = z.object({ bookingId: id }).strict();
+
 /** Wizard lookups. */
 export const scheduleQuerySchema = z.object({ workoutCategory: workoutCategorySchema }).strict();
 export const instantQuerySchema = z.object({ workoutCategory: workoutCategorySchema }).strict();

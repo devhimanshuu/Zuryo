@@ -14,6 +14,12 @@ import {
 import { defaultDeps } from "@/server/booking/deps";
 import { fail, type ServiceResult } from "@/server/booking/errors";
 import { getInstantOffer, getMatches, type MatchResult } from "@/server/booking/matching-service";
+import {
+  getRescheduleOptions,
+  rescheduleBooking,
+  type RescheduledBooking,
+  type RescheduleOptions,
+} from "@/server/booking/reschedule-service";
 import { runAction } from "./run";
 
 /*
@@ -99,6 +105,20 @@ export async function cancelBookingAsTrainerAction(input: unknown): Promise<Serv
   return runAction("cancel-booking:trainer", async () => {
     const result = await cancelBooking(defaultDeps(), await getActor("TRAINER"), input);
     if (result.ok) revalidateBookingViews();
+    return result;
+  });
+}
+
+export async function getRescheduleOptionsAction(input: unknown): Promise<ServiceResult<RescheduleOptions>> {
+  return runAction("reschedule-options", async () =>
+    getRescheduleOptions(defaultDeps(), await getActor("CUSTOMER"), input),
+  );
+}
+
+export async function rescheduleBookingAction(input: unknown): Promise<ServiceResult<RescheduledBooking>> {
+  return runAction("reschedule-booking", async () => {
+    const result = await rescheduleBooking(defaultDeps(), await getActor("CUSTOMER"), input);
+    if (result.ok && !result.data.unchanged) revalidateBookingViews();
     return result;
   });
 }

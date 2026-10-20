@@ -68,7 +68,14 @@ export type CandidatePool = {
  */
 export async function loadCandidatePool(
   db: DbOrTx,
-  args: { serviceZoneId: string; category: WorkoutCategory; from: Date; to: Date },
+  args: {
+    serviceZoneId: string;
+    category: WorkoutCategory;
+    from: Date;
+    to: Date;
+    /** A booking being rescheduled: its current slot must not count against its own move. */
+    excludeBookingId?: string;
+  },
 ): Promise<CandidatePool> {
   // One round of three parallel queries (not trainers first, then their schedules): every query
   // filters on the same trainer criteria, which matters when the database is a long hop away.
@@ -102,6 +109,7 @@ export async function loadCandidatePool(
         status: { in: [...ACTIVE_BOOKING_STATUSES] },
         startAt: { lt: args.to },
         endAt: { gt: args.from },
+        ...(args.excludeBookingId ? { id: { not: args.excludeBookingId } } : {}),
       },
       select: { trainerId: true, startAt: true, endAt: true, status: true },
     }),
@@ -136,6 +144,7 @@ export async function loadCustomerBookings(
   customerId: string,
   from: Date,
   to: Date,
+  excludeBookingId?: string,
 ): Promise<BookingIntervalLike[]> {
   return db.booking.findMany({
     where: {
@@ -143,6 +152,7 @@ export async function loadCustomerBookings(
       status: { in: [...ACTIVE_BOOKING_STATUSES] },
       startAt: { lt: to },
       endAt: { gt: from },
+      ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
     },
     select: { startAt: true, endAt: true, status: true },
   });
@@ -160,7 +170,14 @@ export function dayRange(startAt: Date, timeZone: string): { from: Date; to: Dat
 // ─── Customer slot grid ─────────────────────────────────────────────────────
 
 export type SlotStatus =
-  "AVAILABLE" | "UNAVAILABLE" | "PAST" | "INSTANT_WINDOW" | "TOO_FAR" | "YOU_ARE_BOOKED";
+  | "AVAILABLE"
+  | "UNAVAILABLE"
+  | "PAST"
+  | "INSTANT_WINDOW"
+  | "TOO_FAR"
+  | "YOU_ARE_BOOKED"
+  /** Rescheduling a paid booking: a trainer is free, but the slot costs a different amount. */
+  | "PRICE_DIFFERS";
 
 export type SlotView = {
   startAt: string;
@@ -171,6 +188,9 @@ export type SlotView = {
 };
 
 export type DaySchedule = { dateKey: string; availableCount: number; slots: SlotView[] };
+
+/** A booking being moved: its own slot doesn't block it, and a paid booking needs the same total. */
+export type RescheduleScope = { excludeBookingId: string; requireTotal?: string };
 
 export type ScheduleView = {
   timeZone: string;
@@ -188,6 +208,8 @@ function buildDays(
     customerBookings: BookingIntervalLike[];
     pricing: ActivePricing;
     now: Date;
+    /** Only slots with exactly this total are bookable (rescheduling a pay-per-session booking). */
+    requireTotal?: string;
   },
 ): DaySchedule[] {
   const tz = ctx.customer.timeZone;
@@ -207,7 +229,11 @@ function buildDays(
       }
       const criteria = { category: ctx.category, startAt, timeZone: tz };
       const trainerCount = ctx.candidates.filter((c) => ineligibility(c, criteria) === null).length;
-      return { ...base, trainerCount, status: trainerCount > 0 ? "AVAILABLE" : "UNAVAILABLE" };
+      if (trainerCount === 0) return { ...base, status: "UNAVAILABLE" };
+      if (ctx.requireTotal && quote.totalAmount !== ctx.requireTotal) {
+        return { ...base, trainerCount, status: "PRICE_DIFFERS" };
+      }
+      return { ...base, trainerCount, status: "AVAILABLE" };
     });
     return { dateKey, availableCount: slots.filter((s) => s.status === "AVAILABLE").length, slots };
   });
@@ -219,6 +245,8 @@ export async function getSchedule(
   customer: CustomerContext,
   category: WorkoutCategory,
   dayCount: number = BOOKING_HORIZON_DAYS,
+  /** For rescheduling: ignore this booking's own slot, and optionally require a matching total. */
+  reschedule?: RescheduleScope,
 ): Promise<ScheduleView> {
   const now = deps.now();
   const tz = customer.timeZone;
@@ -226,9 +254,10 @@ export async function getSchedule(
   const dateKeys = Array.from({ length: dayCount }, (_, i) => addDaysToKey(todayKey, i));
   const from = zonedDayStart(todayKey, tz);
   const to = zonedDayStart(addDaysToKey(todayKey, dayCount), tz);
+  const excludeBookingId = reschedule?.excludeBookingId;
   const [pool, customerBookings, pricing] = await Promise.all([
-    loadCandidatePool(deps.db, { serviceZoneId: customer.serviceZoneId, category, from, to }),
-    loadCustomerBookings(deps.db, customer.userId, from, to),
+    loadCandidatePool(deps.db, { serviceZoneId: customer.serviceZoneId, category, from, to, excludeBookingId }),
+    loadCustomerBookings(deps.db, customer.userId, from, to, excludeBookingId),
     loadActivePricing(deps.db, now),
   ]);
   return {
@@ -242,6 +271,7 @@ export async function getSchedule(
       customerBookings,
       pricing,
       now,
+      requireTotal: reschedule?.requireTotal,
     }),
   };
 }
@@ -256,6 +286,7 @@ export async function findAlternatives(
   category: WorkoutCategory,
   around: Date,
   limit = 3,
+  reschedule?: RescheduleScope,
 ): Promise<SlotSuggestion[]> {
   const now = deps.now();
   const tz = customer.timeZone;
@@ -263,9 +294,10 @@ export async function findAlternatives(
   const dateKeys = [0, 1, 2].map((i) => addDaysToKey(firstKey, i));
   const from = zonedDayStart(dateKeys[0]!, tz);
   const to = zonedDayStart(addDaysToKey(firstKey, 3), tz);
+  const excludeBookingId = reschedule?.excludeBookingId;
   const [pool, customerBookings, pricing] = await Promise.all([
-    loadCandidatePool(deps.db, { serviceZoneId: customer.serviceZoneId, category, from, to }),
-    loadCustomerBookings(deps.db, customer.userId, from, to),
+    loadCandidatePool(deps.db, { serviceZoneId: customer.serviceZoneId, category, from, to, excludeBookingId }),
+    loadCustomerBookings(deps.db, customer.userId, from, to, excludeBookingId),
     loadActivePricing(deps.db, now),
   ]);
   const target = around.getTime();
@@ -276,6 +308,7 @@ export async function findAlternatives(
     customerBookings,
     pricing,
     now,
+    requireTotal: reschedule?.requireTotal,
   })
     .flatMap((d) => d.slots)
     .filter((s) => s.status === "AVAILABLE" && s.startAt !== around.toISOString())
