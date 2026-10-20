@@ -1,4 +1,4 @@
-// Zuryo data model. See docs/architecture.md for the reasoning behind each choice.
+// Zuryo data model. See docs/ARCHITECTURE.md for the reasoning behind each choice.
 // Conventions:
 //   - Money is Decimal(10, 2) in INR rupees. Never Float.
 //   - Percentages are Decimal(5, 2) (10.00 = 10%).
@@ -621,8 +621,13 @@ model AiRequestLog {
   source     RecommendationSource
   outcome    AiRequestOutcome
   modelId    String?
-  /// Short failure kind, e.g. TIMEOUT / INVALID_OUTPUT / PROVIDER_ERROR / UNCONFIGURED. No secrets or stack traces.
+  /// Short failure kind, e.g. TIMEOUT / RATE_LIMITED / INVALID_OUTPUT / PROVIDER_ERROR / UNCONFIGURED. No secrets or stack traces.
   errorKind  String?
+  /// Wall-clock milliseconds of the provider call (including a failed attempt before the fallback).
+  latencyMs    Int?
+  /// Provider-reported token usage for the call, when the provider returned it.
+  inputTokens  Int?
+  outputTokens Int?
   createdAt  DateTime           @default(now()) @db.Timestamptz(3)
 
   customer CustomerProfile @relation(fields: [customerId], references: [userId], onDelete: Cascade)
