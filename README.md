@@ -1,105 +1,143 @@
 # Zuryo
 
-On-demand personal training for residential communities. Customers book a 60-minute session with a qualified trainer, either **instantly** (starting within the hour) or **scheduled** for later. Trainers manage availability and run sessions, and operations teams oversee bookings, assignments and pricing.
+On-demand personal training for residential communities. Customers book a 60-minute session with a
+trainer in their community, **instantly** (starting within the hour) or **scheduled** for later.
+Trainers publish availability and run timed sessions; operations oversee bookings, trainers and
+pricing. Payments and all data are **simulated/synthetic**.
 
-> **Status: full booking, payments and fitness loop (Phases 1–5).** The data model, seed data, design system and all three role workspaces read real data from Postgres. Booking with trainer matching and configurable pricing, package purchases with a simulated checkout, the session lifecycle (start, 55-minute warning, completion), fitness profiles with AI/rule-based workout recommendations, and email+password sign-in (NextAuth) are all implemented. Payments and the demo dataset are explicitly simulated.
+**Live demo:** https://zuryo-one.vercel.app · **Repository:** https://github.com/devhimanshuu/Zuryo
+
+## What it does
+
+- **Customer:** fitness assessment (age, weight, goals, level, preferences) → booking wizard
+  (instant/scheduled, workout type, slot, optional preferred trainer, price breakdown) → confirmation,
+  cancel/reschedule → packages with simulated checkout → session history, feedback and AI/rule-based
+  workout recommendations.
+- **Trainer:** schedule, availability windows, session console with a server-backed 60-minute timer
+  and 55-minute warning, session summary (activities, notes, suggested next workout).
+- **Operations:** dashboard from persisted data, all bookings, trainer roster, pricing/peak-window
+  editor, overdue-session reconciliation.
+
+Pricing: standard ₹399, peak ₹499, plus a 10% society commission added at checkout
+(₹399 → ₹438.90; ₹499 → ₹548.90). The server computes the payable amount.
+
+## Feature status
+
+**Implemented and verified** (unit + live-database integration tests, browser E2E, and a live
+smoke run; details in [docs/TESTING.md](docs/TESTING.md)): instant/scheduled booking, availability,
+automatic trainer assignment by seeded service zone, preferred trainer, double-booking protection,
+no-trainer handling, server-side pricing and commission, simulated checkout, packages and ledger
+(single deduction, restore on cancel), cancel and reschedule with notifications, session
+start/timer/55-minute warning/60-minute completion (idempotent), fitness profile and session
+records, role-based access, AI recommendation with labelled rule-based fallback.
+
+**Implemented but not fully verified:** live LLM output (worked on 2026-10-20; HTTP 429 free-tier
+rate limit on 2026-10-21, so the fallback was what ran); Anthropic provider path (unit-tested
+against recorded shapes, never called live); automatic scheduled processing (the cron endpoint
+exists and is verified to reject bad tokens, but no scheduler is attached).
+
+**Partially implemented:** location (seeded service zones with synthetic coordinates, not GPS or
+distance); notifications (in-app only).
+
+**Proposed, not built:** push/SMS/email, live GPS and ETA, real payments, public sign-up, demand-based
+pricing, React Native client. See [docs/TECHNICAL_DECISIONS.md](docs/TECHNICAL_DECISIONS.md).
 
 ## Stack
 
-| Layer   | Choice                                                                 | Why                                                                                                               |
-| ------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| App     | Next.js 15.5 (App Router), React 19, TypeScript (strict)               | One deployable unit for UI and API, with server components reading the DB directly and first-class Vercel support |
-| UI      | Tailwind CSS 4, shadcn/ui conventions (Radix + cva), Lucide icons      | Design tokens as CSS variables; accessible primitives without a heavy component kit                               |
-| Forms   | React Hook Form + Zod 4                                                | One schema validates on the client and again on the server                                                        |
-| Data    | PostgreSQL on Neon, Prisma 6 (Rust-free client + `@prisma/adapter-pg`) | Relational integrity for bookings and money; no native engine binary to bundle on Vercel                          |
-| Quality | ESLint 9, Prettier, Vitest                                             | Fast, conventional                                                                                                |
+Next.js 15 (App Router) · React 19 · TypeScript (strict) · Tailwind CSS 4 + Radix primitives ·
+React Hook Form + Zod 4 · NextAuth v5 (credentials, JWT) · PostgreSQL on Neon · Prisma 6 (Rust-free
+client + `@prisma/adapter-pg`) · OpenRouter / Anthropic for AI · Vitest · Playwright · Vercel.
 
-Read [docs/architecture.md](docs/architecture.md) for the reasoning, data model and trade-offs.
+```
+Browser ──▶ middleware (JWT + role) ──▶ Server Components / Server Actions ──▶ services ──▶ PostgreSQL
+                                                                              └──▶ AI provider (fitness only)
+Scheduler (optional) ──Bearer CRON_SECRET──▶ /api/cron/session-lifecycle
+```
+
+Full design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Demo access
+
+Open the live URL → **Sign in**, pick the workspace, use any seeded email with the demo password
+`password123` (synthetic accounts on `*.example` addresses; the password is also printed on the
+sign-in page):
+
+| Workspace  | Email                                                                                                                      |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Customer   | `priya.sharma@demo.zuryo.example` (Palm Grove Residences; has a package, so booking offers "Confirm with package session") |
+| Trainer    | `arjun.mehta@demo.zuryo.example`                                                                                           |
+| Operations | `neha.kapoor@demo.zuryo.example`                                                                                           |
+
+`ananya.iyer@demo.zuryo.example` lives in Lakeview Heights, which has no Strength trainer, so choosing
+Strength there demonstrates the "no trainer in your community" behaviour.
 
 ## Getting started
 
-Prerequisites: Node.js 20.9+ and npm, plus a Postgres database (Neon free tier recommended, or a local Postgres 15+).
+Prerequisites: Node.js 20.9+, npm, a PostgreSQL database (Neon free tier or local Postgres 15+).
 
 ```bash
 npm install                 # also runs `prisma generate`
-cp .env.example .env        # then fill in DATABASE_URL and DIRECT_URL (see below)
-npm run db:deploy           # apply migrations
-npm run db:seed             # load the synthetic demo data (safe to re-run)
+cp .env.example .env        # fill DATABASE_URL, DIRECT_URL, AUTH_SECRET (see the file for every variable)
+npm run db:deploy           # apply migrations (non-destructive)
+npm run db:seed             # deterministic synthetic demo data; idempotent upserts
 npm run dev                 # http://localhost:3000
 ```
 
-### Getting a Neon connection string
-
-1. Create a free project at <https://console.neon.tech>. Choose the region closest to your users (for India, AWS Singapore `ap-southeast-1`).
-2. Create a database named `zuryo` (or use `neondb`).
-3. Open **Dashboard → Connect** and pick **Prisma** as the connection type.
-4. Copy the **pooled** string (host contains `-pooler`) into `DATABASE_URL`.
-5. Copy the **direct** string (no `-pooler`) into `DIRECT_URL`. Prisma Migrate needs a direct connection; the app uses the pooled one at runtime.
-6. Keep `?sslmode=require` on both.
-
-For a local Postgres, set both variables to the same URL, e.g. `postgresql://postgres:postgres@localhost:5432/zuryo`.
+| Command                              | Purpose                                                                                                  |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `npm run lint` / `npm run typecheck` | ESLint / `tsc --noEmit`                                                                                  |
+| `npm test`                           | Unit tests (no database)                                                                                 |
+| `npm run test:integration`           | DB integration tests; needs `TEST_DATABASE_URL` (disposable DB — it is truncated)                        |
+| `npm run test:e2e`                   | Playwright journeys against a production build and the test DB (`npx playwright install chromium` first) |
+| `npm run build`                      | `prisma generate && next build`                                                                          |
+| `npm run ai:smoke`                   | One live AI provider call with synthetic data (prints latency and tokens)                                |
+| `bash scripts/smoke.sh <url>`        | HTTP smoke test (sign-in, pages, role isolation) against a deployment                                    |
+| `node scripts/live-smoke.mjs <url>`  | Browser smoke: book, check price, cancel against a deployment (demo DB only)                             |
 
 ## Environment variables
 
-| Variable              | Scope           | Required         | Purpose                                                         |
-| --------------------- | --------------- | ---------------- | --------------------------------------------------------------- |
-| `DATABASE_URL`        | server only     | yes              | Pooled Postgres URL used by the app at runtime                  |
-| `DIRECT_URL`          | server only     | for migrations   | Direct Postgres URL used by `prisma migrate`                    |
-| `AUTH_SECRET`         | server only     | yes              | Signs the NextAuth session JWT (see `.env.example`)             |
-| `ANTHROPIC_API_KEY`   | server only     | no               | AI workout recommendations; unset = rule-based fallback         |
-| `ANTHROPIC_MODEL`     | server only     | no               | Model for recommendations (default `claude-3-5-haiku-latest`)   |
-| `NEXT_PUBLIC_APP_URL` | browser-visible | no               | Canonical URL for metadata; defaults to `http://localhost:3000` |
+Everything is documented in [.env.example](.env.example). Summary:
 
-Server variables are validated with Zod in `src/lib/config/env.server.ts`, which imports `server-only`. Any attempt to import it from a client component fails the build. Only `NEXT_PUBLIC_*` values reach the browser. `.env` is git-ignored; never commit real credentials.
+| Variable                                  | Scope  | Required           | Purpose                                                                 |
+| ----------------------------------------- | ------ | ------------------ | ----------------------------------------------------------------------- |
+| `DATABASE_URL`                            | server | yes                | Pooled Postgres URL (runtime)                                           |
+| `DIRECT_URL`                              | server | yes for migrations | Direct Postgres URL (Prisma Migrate)                                    |
+| `AUTH_SECRET`                             | server | yes                | Signs session JWTs; use a different value per environment               |
+| `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` | server | no                 | AI via OpenRouter; unset → rule-based fallback                          |
+| `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL`   | server | no                 | Alternative AI provider                                                 |
+| `CRON_SECRET`                             | server | no                 | Bearer token for `/api/cron/session-lifecycle` (≥16 chars; unset → 503) |
+| `NEXT_PUBLIC_APP_URL`                     | public | no                 | Canonical URL                                                           |
+| `TEST_DATABASE_URL`, `TEST_DIRECT_URL`    | server | tests only         | Disposable test database                                                |
 
-## Scripts
+Server variables are validated by `src/lib/config/env.server.ts` (imports `server-only`); a missing
+or malformed value produces a named error in the server log. Never commit `.env`.
 
-| Command                           | What it does                                    |
-| --------------------------------- | ----------------------------------------------- |
-| `npm run dev`                     | Start the dev server                            |
-| `npm run build` / `npm start`     | Production build / serve                        |
-| `npm run typecheck`               | `tsc --noEmit` (strict)                         |
-| `npm run lint`                    | ESLint                                          |
-| `npm run format` / `format:check` | Prettier                                        |
-| `npm test`                        | Vitest unit tests                               |
-| `npm run check`                   | typecheck + lint + tests                        |
-| `npm run db:validate`             | Validate `prisma/schema.prisma`                 |
-| `npm run db:migrate`              | Create and apply a new migration in development |
-| `npm run db:deploy`               | Apply pending migrations (CI / production)      |
-| `npm run db:seed`                 | Upsert the demo dataset (idempotent)            |
-| `npm run db:reset`                | Drop, re-migrate and re-seed the dev database   |
-| `npm run db:studio`               | Browse data in Prisma Studio                    |
+## Deployment (Vercel + Neon)
 
-## Signing in
+Deployed at https://zuryo-one.vercel.app (Vercel project `zuryo`). To reproduce:
 
-Authentication is real (NextAuth v5, credentials provider, bcrypt-hashed passwords, signed JWT session cookie), and middleware protects each workspace by role. The database itself is demo data: every seeded account shares the demo password **`password123`** (printed by `npm run db:seed` and listed on the sign-in page).
-
-| Workspace  | Seeded account                                                |
-| ---------- | ------------------------------------------------------------- |
-| Customer   | `priya.sharma@demo.zuryo.example` (or any other seeded email) |
-| Trainer    | `arjun.mehta@demo.zuryo.example`                              |
-| Operations | `neha.kapoor@demo.zuryo.example`                              |
-
-All people, emails (`*.example`), addresses and bookings are synthetic. Demo prices (₹399 normal, ₹499 peak, 10% society commission) are configuration, not market claims.
-
-## Deploying to Vercel
-
-1. Push the repository to GitHub and import it in Vercel. The framework preset is detected.
-2. Add `DATABASE_URL`, `DIRECT_URL` and `NEXT_PUBLIC_APP_URL` in **Project → Settings → Environment Variables**.
-3. Run migrations against Neon once, from your machine (`npm run db:deploy`), then seed it (`npm run db:seed`). Alternatively set the Vercel build command to `prisma migrate deploy && npm run build`.
-4. Deploy. `postinstall` runs `prisma generate`, and the Rust-free client needs no extra binaries.
-
-## Project layout
-
+```bash
+vercel link --project zuryo
+# add DATABASE_URL, DIRECT_URL, AUTH_SECRET, CRON_SECRET, NEXT_PUBLIC_APP_URL (and optionally
+# OPENROUTER_API_KEY) with `vercel env add <NAME> production`
+DATABASE_URL=… DIRECT_URL=… npx prisma migrate deploy   # safe: applies pending migrations only
+npm run db:seed                                          # demo database only
+vercel deploy --prod
+bash scripts/smoke.sh https://<your-app>.vercel.app
 ```
-prisma/            schema, migrations, deterministic seed (seed-data.ts is pure and unit-tested)
-src/app/           routes: (marketing) (auth) (customer) (trainer) (operations), api/auth + api/cron
-src/components/    ui/ primitives · layout/ shells & navigation · shared/ badges, states, images
-src/features/      feature-specific UI (bookings, packages, payments, sessions, fitness, auth)
-src/lib/           config/ env · db/ Prisma client · pricing/ money maths · booking/ · packages/ ·
-                   sessions/ · fitness/ · ai/ (provider abstraction) · auth/ (NextAuth) · validation/ · utils/
-src/server/        server-only services & actions (booking, packages, payments, sessions, fitness, auth)
-src/middleware.ts  role-based route protection (NextAuth)
-tests/             Vitest unit suites + integration/ (live Postgres, `npm run test:integration`)
-docs/              architecture and decisions
-```
+
+`next.config.ts` contains `outputFileTracingIncludes` for the Prisma WASM files; removing it breaks
+every database call on Vercel. Never run `db:reset` against a database you care about.
+
+## Known limitations
+
+- Demo authentication: a shared seeded password, no sign-up, no reset, no MFA.
+- Payment is simulated (clearly labelled); no real card data is handled.
+- Location is seeded service-zone matching. There is no GPS, live position or ETA.
+- Notifications are in-app only.
+- No scheduler is attached; sessions nobody views are completed (with the correct `completedAt`) on the
+  next page load, trainer sync, operations "Reconcile" click, or cron call. Needs a per-minute caller
+  for true automation.
+- Free-tier AI models are rate limited, so the labelled rule-based fallback is common.
+- Neon latency from some regions is high (hundreds of ms/query); pages are slower than they would be
+  with the database co-located with the Vercel function region.
