@@ -58,7 +58,7 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: `npm run build && npx next start -H 127.0.0.1 -p ${port}`,
+    command: `npm run build && npx next start -H localhost -p ${port}`,
     url: baseURL,
     reuseExistingServer: false,
     timeout: 600_000,

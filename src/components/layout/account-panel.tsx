@@ -10,7 +10,7 @@ export function AccountPanel({ role, name }: { role: Role; name: string }) {
       <p className="mt-0.5 truncate text-sm font-semibold" title={name}>
         {name}
       </p>
-      <p className="text-[11px] text-ink-subtle">{NAV[role].title} workspace</p>
+      <p className="text-body-sm text-ink-muted">{NAV[role].title} workspace</p>
       <SignOutButton />
     </div>
   );

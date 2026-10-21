@@ -43,7 +43,7 @@ function FooterCol({ title, links }: { title: string; links: { href: string; lab
       <p className="text-eyebrow font-semibold tracking-[0.08em] text-ink-inverse/60 uppercase">{title}</p>
       <ul className="mt-3 grid gap-2 text-sm">
         {links.map((l) => (
-          <li key={l.href}>
+          <li key={`${l.href}-${l.label}`}>
             <Link href={l.href} className="text-ink-inverse/90 hover:text-ink-inverse hover:underline">
               {l.label}
             </Link>

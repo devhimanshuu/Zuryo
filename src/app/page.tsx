@@ -48,8 +48,8 @@ function Hero() {
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Button asChild variant="primary" size="lg">
-            <Link href="/customer/bookings/new">
-              Book a trainer <ArrowRight aria-hidden />
+            <Link href="/sign-in?callbackUrl=%2Fcustomer%2Fbookings%2Fnew">
+              Sign in to book a trainer <ArrowRight aria-hidden />
             </Link>
           </Button>
           <Button asChild variant="secondary" size="lg">
@@ -343,14 +343,13 @@ function FinalCta() {
             Your next workout is downstairs.
           </h2>
           <p className="mt-3 max-w-lg text-body-lg text-on-brand/85">
-            Explore the customer experience with a demo account, or see how trainers and operations teams
-            work.
+            Choose an open time, see your trainer match and price, then confirm the session.
           </p>
         </div>
         <div className="flex flex-wrap gap-3 lg:justify-end">
           <Button asChild variant="inverse" size="lg">
-            <Link href="/customer/bookings/new">
-              Book a trainer <ArrowRight aria-hidden />
+            <Link href="/sign-in?callbackUrl=%2Fcustomer%2Fbookings%2Fnew">
+              Sign in to book a trainer <ArrowRight aria-hidden />
             </Link>
           </Button>
           <Button

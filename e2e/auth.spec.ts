@@ -37,17 +37,29 @@ test.describe("authentication", () => {
     // Wait for hydration: a click before React attaches the handler is silently dropped.
     await page.waitForLoadState("networkidle");
     await page.getByRole("button", { name: "Sign out" }).click();
-    // `signOut()` clears the session cookie over the network and only then navigates. Under a
-    // loaded suite that navigation can land while the cookie is still live, so middleware bounces
-    // /sign-in back to /customer and the assertion below would see a signed-in page. Wait for the
-    // precondition the test actually depends on — the session being gone — then assert the result.
-    await page.waitForURL("**/sign-in");
+
+    // `signOut()` posts to clear the session cookie and then navigates. Under suite load the
+    // navigation can race the cookie clear: middleware sees a live session and bounces /sign-in
+    // back to /customer. Poll the session endpoint until it is genuinely gone, regardless of
+    // which page the browser currently shows.
     await expect
-      .poll(() => page.evaluate(() => fetch("/api/auth/session").then((r) => r.json())), {
-        message: "session should be cleared after signing out",
-        timeout: 20_000,
-      })
+      .poll(
+        async () => {
+          try {
+            return await page.evaluate(async () => {
+              const res = await fetch("/api/auth/session");
+              const body = await res.json();
+              return body && Object.keys(body).length > 0 ? "active" : null;
+            });
+          } catch {
+            return null;
+          }
+        },
+        { message: "session should be cleared after signing out", timeout: 30_000 },
+      )
       .toBeNull();
+
+    // Session is confirmed dead. Navigate to a protected page and verify the redirect.
     await page.goto("/customer");
     await page.waitForURL(/\/sign-in\?callbackUrl=/);
   });

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DEMO_PASSWORD } from "@/lib/auth/demo-password";
+import { roleForCallback, safeCallbackUrl } from "@/lib/auth/callback-url";
 import { ROLE_HOME, type Role } from "@/lib/validation/enums";
 import { cn } from "@/lib/utils/cn";
 
@@ -19,6 +20,8 @@ const ROLE_OPTIONS: Array<{ role: Role; label: string; hint: string }> = [
 ];
 
 /** Seeded demo accounts (see prisma/seed-data.ts). All share one demo password. */
+const CALLBACK_ORIGIN = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+
 const DEMO_ACCOUNTS: Array<{ role: Role; name: string; email: string }> = [
   { role: "CUSTOMER", name: "Priya Sharma", email: "priya.sharma@demo.zuryo.example" },
   { role: "CUSTOMER", name: "Rahul Verma", email: "rahul.verma@demo.zuryo.example" },
@@ -29,9 +32,9 @@ const DEMO_ACCOUNTS: Array<{ role: Role; name: string; email: string }> = [
 ];
 
 /** Email + password sign-in. Credentials go only to the NextAuth credentials endpoint. */
-export function SignInForm() {
+export function SignInForm({ callbackUrl }: { callbackUrl?: string }) {
   const router = useRouter();
-  const [role, setRole] = useState<Role>("CUSTOMER");
+  const [role, setRole] = useState<Role>(() => roleForCallback(callbackUrl, CALLBACK_ORIGIN) ?? "CUSTOMER");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +53,10 @@ export function SignInForm() {
         setError("That email and password didn't match an active account for this workspace.");
         return;
       }
-      router.push(ROLE_HOME[role]);
+      const callbackRole = roleForCallback(callbackUrl, CALLBACK_ORIGIN);
+      const effectiveRole = callbackRole ?? role;
+      const destination = safeCallbackUrl(callbackUrl, effectiveRole, CALLBACK_ORIGIN) ?? ROLE_HOME[effectiveRole];
+      router.push(destination);
       router.refresh();
     });
   }
@@ -66,22 +72,26 @@ export function SignInForm() {
     <div className="grid gap-6">
       <fieldset className="grid gap-1.5">
         <legend className="font-semibold">Workspace</legend>
-        <div className="grid grid-cols-3 gap-1 rounded-md bg-sunken p-1" role="radiogroup" aria-label="Workspace">
+        <div className="grid grid-cols-3 gap-1 rounded-md bg-sunken p-1">
           {ROLE_OPTIONS.map((o) => (
-            <button
+            <label
               key={o.role}
-              type="button"
-              role="radio"
-              aria-checked={role === o.role}
-              title={o.hint}
-              onClick={() => setRole(o.role)}
               className={cn(
-                "rounded-sm px-2 py-1.5 text-sm font-semibold",
+                "relative flex min-h-11 cursor-pointer items-center justify-center rounded-sm px-2 py-1.5 text-sm font-semibold transition-colors",
                 role === o.role ? "bg-raised text-ink shadow-(--shadow-1)" : "text-ink-muted hover:text-ink",
               )}
             >
-              {o.label}
-            </button>
+              <input
+                type="radio"
+                name="workspace"
+                value={o.role}
+                checked={role === o.role}
+                onChange={() => setRole(o.role)}
+                className="peer sr-only"
+              />
+              <span>{o.label}</span>
+              <span className="pointer-events-none absolute inset-0 rounded-sm peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus" />
+            </label>
           ))}
         </div>
         <p className="text-body-sm text-ink-muted">{ROLE_OPTIONS.find((o) => o.role === role)?.hint}</p>
@@ -123,33 +133,38 @@ export function SignInForm() {
             {error}
           </Notice>
         ) : null}
-        <Button type="submit" variant="primary" size="lg" loading={pending} disabled={!email || !password}>
+        <Button type="submit" variant="primary" size="lg" loading={pending}>
           <KeyRound aria-hidden /> Sign in
         </Button>
       </form>
 
-      <div className="grid gap-3 rounded-md bg-info-soft p-3 text-body-sm text-info">
+      <div className="grid gap-2 rounded-md bg-info-soft p-3 text-body-sm text-info">
         <p className="flex items-start gap-2">
           <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
           <span>
-            <strong className="font-semibold">Demo database.</strong> Every seeded account shares the demo password{" "}
-            <code className="font-semibold">{DEMO_PASSWORD}</code>. Pick an account below to fill the form.
+            <strong className="font-semibold">Demo database.</strong> Seeded accounts share password{" "}
+            <code className="font-semibold">{DEMO_PASSWORD}</code>.
           </span>
         </p>
-        <ul className="grid gap-1">
-          {DEMO_ACCOUNTS.map((a) => (
-            <li key={a.email}>
-              <button
-                type="button"
-                onClick={() => pick(a.role, a.email)}
-                className="w-full rounded-sm px-2 py-1.5 text-left font-semibold hover:bg-info/10"
-              >
-                {a.name} · {a.role.toLowerCase()}
-                <span className="block truncate text-xs font-normal opacity-80">{a.email}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <details className="group border-t border-info/15 pt-2">
+          <summary className="min-h-11 cursor-pointer py-2 font-semibold underline decoration-info/40 underline-offset-2 hover:decoration-info">
+            Choose a seeded account
+          </summary>
+          <ul className="grid gap-1">
+            {DEMO_ACCOUNTS.map((a) => (
+              <li key={a.email}>
+                <button
+                  type="button"
+                  onClick={() => pick(a.role, a.email)}
+                  className="min-h-11 w-full rounded-sm px-2 py-1.5 text-left font-semibold hover:bg-info/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                >
+                  {a.name} · {a.role.toLowerCase()}
+                  <span className="block truncate text-xs font-normal opacity-80">{a.email}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
       </div>
     </div>
   );
