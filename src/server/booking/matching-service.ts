@@ -68,7 +68,13 @@ export async function getMatches(
   const tz = customer.timeZone;
   const { from, to } = dayRange(args.startAt, tz);
   const [pool, customerBookings, pricing] = await Promise.all([
-    loadCandidatePool(deps.db, { serviceZoneId: customer.serviceZoneId, category: args.category, from, to }),
+    loadCandidatePool(deps.db, {
+      serviceZoneId: customer.serviceZoneId,
+      category: args.category,
+      from,
+      to,
+      destination: customer.location,
+    }),
     loadCustomerBookings(deps.db, customer.userId, from, to),
     loadActivePricing(deps.db, now),
   ]);
@@ -83,6 +89,7 @@ export async function getMatches(
     category: args.category,
     startAt: args.startAt,
     timeZone: tz,
+    departFrom: now,
   });
   if (ranked.length === 0) {
     return fail(
@@ -106,8 +113,9 @@ export async function getMatches(
 
 /**
  * The earliest instant session: the first start between now + 15 min and now + 60 min with an
- * eligible trainer. When nobody can start within the hour the result says so and suggests the
- * nearest scheduled slots instead; it never pretends someone is instantly available.
+ * eligible trainer who can also travel there by then (setting out now). When nobody can start
+ * within the hour the result says so and suggests the nearest scheduled slots instead; it never
+ * pretends someone is instantly available.
  */
 export async function getInstantOffer(
   deps: BookingDeps,
@@ -123,13 +131,18 @@ export async function getInstantOffer(
   const range = { from: dayFrom < from ? dayFrom : from, to: dayTo > to ? dayTo : to };
 
   const [pool, customerBookings, pricing] = await Promise.all([
-    loadCandidatePool(deps.db, { serviceZoneId: customer.serviceZoneId, category, ...range }),
+    loadCandidatePool(deps.db, {
+      serviceZoneId: customer.serviceZoneId,
+      category,
+      ...range,
+      destination: customer.location,
+    }),
     loadCustomerBookings(deps.db, customer.userId, range.from, range.to),
     loadActivePricing(deps.db, now),
   ]);
 
   const open = starts.filter((s) => !hasActiveOverlap(customerBookings, s, sessionEnd(s)));
-  const match = findEarliestMatch(pool.candidates, category, open, tz);
+  const match = findEarliestMatch(pool.candidates, category, open, tz, now);
   if (!match) {
     return fail(
       "NO_TRAINER",

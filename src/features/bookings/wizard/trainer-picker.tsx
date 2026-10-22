@@ -1,7 +1,8 @@
 "use client";
 
-import { BadgeCheck, Check, Info } from "lucide-react";
+import { BadgeCheck, Check, Info, MapPin } from "lucide-react";
 import { categoryLabel } from "@/lib/booking/categories";
+import { describeTravel } from "@/lib/location/travel";
 import { cn } from "@/lib/utils/cn";
 import type { MatchResult } from "@/server/booking/matching-service";
 import { choiceCard, initials } from "./shared";
@@ -29,7 +30,7 @@ export function TrainerPicker({
               onChange={() => onSelect(t.trainerId)}
               className="sr-only"
               aria-labelledby={`trainer-${t.trainerId}-name`}
-              aria-describedby={`trainer-${t.trainerId}-why`}
+              aria-describedby={`trainer-${t.trainerId}-travel trainer-${t.trainerId}-why`}
             />
             <span
               className="grid size-12 shrink-0 place-items-center rounded-full bg-brand-soft font-semibold text-brand"
@@ -53,6 +54,15 @@ export function TrainerPicker({
                 {t.specializations.join(" · ")}
                 {t.experienceYears ? ` · ${t.experienceYears} years coaching` : ""}
               </span>
+              {t.travel ? (
+                <span
+                  id={`trainer-${t.trainerId}-travel`}
+                  className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-info-soft px-2 py-0.5 text-body-sm font-semibold text-info"
+                >
+                  <MapPin className="size-3.5" aria-hidden />
+                  {describeTravel(t.travel)} to reach you
+                </span>
+              ) : null}
               {t.bio ? <span className="mt-1 block text-body-sm text-ink-subtle">{t.bio}</span> : null}
               <span id={`trainer-${t.trainerId}-why`} className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
                 {t.reasons.map((r) => (
