@@ -136,7 +136,11 @@ async function finalizeCompletion(
 }
 
 /** The assigned trainer starts a confirmed session inside its start window. Idempotent. */
-export async function startSession(deps: BookingDeps, actor: Actor, raw: unknown): Promise<ServiceResult<SessionState>> {
+export async function startSession(
+  deps: BookingDeps,
+  actor: Actor,
+  raw: unknown,
+): Promise<ServiceResult<SessionState>> {
   if (actor.role !== "TRAINER") return fail("FORBIDDEN", "Only the assigned trainer can start a session.");
   const parsed = bookingIdSchema.safeParse(raw);
   if (!parsed.success) return fail("VALIDATION", "Choose a session to start.");
@@ -277,7 +281,10 @@ export async function reconcileDueSessions(
 /** Lifecycle state for the assigned trainer (reconciled first, so it is never stale). */
 export async function getSessionForTrainer(deps: BookingDeps, actor: Actor, bookingId: string) {
   if (actor.role !== "TRAINER" || bookingId.length > 40) return null;
-  const owned = await deps.db.booking.findFirst({ where: { id: bookingId, trainerId: actor.userId }, select: { id: true } });
+  const owned = await deps.db.booking.findFirst({
+    where: { id: bookingId, trainerId: actor.userId },
+    select: { id: true },
+  });
   if (!owned) return null;
   await reconcileSession(deps, bookingId);
   const row = await deps.db.booking.findUnique({
@@ -307,10 +314,15 @@ export async function getSessionForTrainer(deps: BookingDeps, actor: Actor, book
  */
 export async function getSessionsNeedingAttention(db: DbOrTx, now: Date) {
   const startCutoff = addMinutes(now, -SESSION_START_LATE_MINUTES);
-  const [overdue, notStarted] = await Promise.all([
+  const overdueWhere = {
+    status: "IN_PROGRESS" as const,
+    sessionRecord: { completedAt: null, endsAt: { lte: now } },
+  };
+  const notStartedWhere = { status: "CONFIRMED" as const, startAt: { lt: startCutoff } };
+  const [overdue, overdueCount, notStarted, notStartedCount] = await Promise.all([
     db.booking.findMany({
-      where: { status: "IN_PROGRESS", sessionRecord: { completedAt: null, endsAt: { lte: now } } },
-      orderBy: { startAt: "asc" },
+      where: overdueWhere,
+      orderBy: [{ startAt: "asc" }, { id: "asc" }],
       take: 20,
       include: {
         customer: { select: { user: { select: { name: true } } } },
@@ -318,17 +330,19 @@ export async function getSessionsNeedingAttention(db: DbOrTx, now: Date) {
         sessionRecord: { select: { endsAt: true } },
       },
     }),
+    db.booking.count({ where: overdueWhere }),
     db.booking.findMany({
-      where: { status: "CONFIRMED", startAt: { lt: startCutoff } },
-      orderBy: { startAt: "desc" },
+      where: notStartedWhere,
+      orderBy: [{ startAt: "desc" }, { id: "desc" }],
       take: 20,
       include: {
         customer: { select: { user: { select: { name: true } } } },
         trainer: { select: { user: { select: { name: true } } } },
       },
     }),
+    db.booking.count({ where: notStartedWhere }),
   ]);
-  return { overdue, notStarted };
+  return { overdue, overdueCount, notStarted, notStartedCount };
 }
 
 /**
@@ -350,7 +364,9 @@ export async function syncSessionForTrainer(
   if (!owned) return fail("NOT_FOUND", "We couldn't find that session.");
   const r = await reconcileSession(deps, owned.id);
   const state = await readState(deps.db, owned.id, deps.now());
-  return state ? ok({ ...state, changed: r.warned || r.completed }) : fail("NOT_FOUND", "We couldn't find that session.");
+  return state
+    ? ok({ ...state, changed: r.warned || r.completed })
+    : fail("NOT_FOUND", "We couldn't find that session.");
 }
 
 // ─── Session records: the trainer's summary and the customer's feedback ─────
@@ -365,7 +381,8 @@ export async function saveSessionSummary(
   actor: Actor,
   raw: unknown,
 ): Promise<ServiceResult<{ bookingId: string; activities: number }>> {
-  if (actor.role !== "TRAINER") return fail("FORBIDDEN", "Only the assigned trainer can write the session summary.");
+  if (actor.role !== "TRAINER")
+    return fail("FORBIDDEN", "Only the assigned trainer can write the session summary.");
   const parsed = sessionSummarySchema.safeParse(raw);
   if (!parsed.success) {
     return fail("VALIDATION", parsed.error.issues[0]?.message ?? "Check the session summary.", {
@@ -398,7 +415,8 @@ export async function submitSessionFeedback(
   actor: Actor,
   raw: unknown,
 ): Promise<ServiceResult<{ bookingId: string }>> {
-  if (actor.role !== "CUSTOMER") return fail("FORBIDDEN", "Only the customer can give feedback on a session.");
+  if (actor.role !== "CUSTOMER")
+    return fail("FORBIDDEN", "Only the customer can give feedback on a session.");
   const parsed = sessionFeedbackSchema.safeParse(raw);
   if (!parsed.success) {
     return fail("VALIDATION", parsed.error.issues[0]?.message ?? "Check your feedback.", {

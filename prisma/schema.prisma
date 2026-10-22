@@ -438,6 +438,9 @@ model Booking {
   @@index([trainerId, startAt])
   @@index([status, startAt])
   @@index([serviceZoneId, startAt])
+  @@index([customerId, status, startAt], map: "Booking_customerId_status_startAt_idx")
+  @@index([trainerId, status, startAt], map: "Booking_trainerId_status_startAt_idx")
+  @@index([startAt(sort: Desc)], map: "Booking_startAt_idx")
 }
 
 // ─── Packages ──────────────────────────────────────────────────────────
@@ -497,6 +500,7 @@ model Package {
   notifications Notification[]
 
   @@index([customerId, status])
+  @@index([customerId, purchasedAt(sort: Desc)], map: "Package_customerId_purchasedAt_idx")
 }
 
 /// One row per balance movement. The unique (bookingId, reason) pair makes "debit this booking"
@@ -705,4 +709,5 @@ model Notification {
   payment   Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
 
   @@index([recipientId, readAt, createdAt(sort: Desc)])
+  @@index([recipientId, createdAt(sort: Desc)], map: "Notification_recipientId_createdAt_idx")
 }

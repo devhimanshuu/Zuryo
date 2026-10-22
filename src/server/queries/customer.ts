@@ -1,5 +1,7 @@
 import "server-only";
+import type { Prisma } from "@prisma/client";
 import { WORKOUT_CATEGORIES, WORKOUT_CATEGORY_INFO } from "@/lib/booking/categories";
+import { PAGE_SIZES, paginateRows } from "@/lib/pagination";
 import { ACTIVE_BOOKING_STATUSES as ACTIVE_STATUSES } from "@/lib/booking/rules";
 import { getDb } from "@/lib/db";
 import { loadCustomerContext } from "@/server/booking/availability-service";
@@ -71,28 +73,72 @@ export async function getCustomerHome(userId: string, now = new Date()) {
   return { profile, upcoming, recent, pkg, unread };
 }
 
-export async function getCustomerBookings(userId: string) {
-  // Latest-first with a generous cap: the list is a demo-scale history view, not an archive.
-  // True pagination is a later product decision; the cap keeps the query bounded as data grows.
-  return getDb()
-    .booking.findMany({
-      where: { customerId: userId },
-      orderBy: { startAt: "desc" },
-      take: 200,
-      include: customerBookingInclude,
-    })
-    .then((rows) => rows.map(withTrip));
+export const CUSTOMER_BOOKING_TABS = ["upcoming", "completed", "cancelled", "other"] as const;
+export type CustomerBookingTab = (typeof CUSTOMER_BOOKING_TABS)[number];
+
+/** Statuses that still occupy the calendar; IN_PROGRESS rows are pinned as "live" instead. */
+const SCHEDULED_STATUSES = ["PENDING", "CONFIRMED"] as const;
+
+function customerTabWhere(tab: CustomerBookingTab, userId: string, now: Date): Prisma.BookingWhereInput {
+  switch (tab) {
+    case "upcoming":
+      return { customerId: userId, status: { in: [...SCHEDULED_STATUSES] }, endAt: { gte: now } };
+    case "completed":
+      return { customerId: userId, status: "COMPLETED" };
+    case "cancelled":
+      return { customerId: userId, status: "CANCELLED" };
+    case "other":
+      // Declined payments, plus scheduled bookings whose window closed without starting.
+      return {
+        customerId: userId,
+        OR: [{ status: "FAILED" }, { status: { in: [...SCHEDULED_STATUSES] }, endAt: { lt: now } }],
+      };
+  }
 }
 
-export async function getCustomerFitness(userId: string) {
-  const db = getDb();
-  const [profile, sessions] = await Promise.all([
-    db.customerProfile.findUnique({ where: { userId } }),
-    db.sessionRecord.findMany({
-      where: { booking: { customerId: userId }, completedAt: { not: null } },
-      orderBy: { startedAt: "desc" },
-      include: { booking: { include: { trainer: { include: { user: { select: { name: true } } } } } } },
+/**
+ * One tab at a time, newest first for history and soonest first for upcoming. Counts are exact per
+ * tab, and in-progress sessions are pinned above the list so they can never be pushed off-page.
+ */
+export async function getCustomerBookings(
+  userId: string,
+  tab: CustomerBookingTab = "upcoming",
+  page = 1,
+  now: Date = new Date(),
+  db = getDb(),
+) {
+  const [result, countEntries, live] = await Promise.all([
+    paginateRows({
+      page,
+      pageSize: PAGE_SIZES.customerBookings,
+      count: () => db.booking.count({ where: customerTabWhere(tab, userId, now) }),
+      rows: (skip, take) =>
+        db.booking
+          .findMany({
+            where: customerTabWhere(tab, userId, now),
+            orderBy: [{ startAt: tab === "upcoming" ? "asc" : "desc" }, { id: "desc" }],
+            skip,
+            take,
+            include: customerBookingInclude,
+          })
+          .then((rows) => rows.map(withTrip)),
     }),
+    Promise.all(
+      CUSTOMER_BOOKING_TABS.map(
+        async (each) =>
+          [each, await db.booking.count({ where: customerTabWhere(each, userId, now) })] as const,
+      ),
+    ),
+    db.booking
+      .findMany({
+        where: { customerId: userId, status: "IN_PROGRESS" },
+        orderBy: [{ startAt: "desc" }, { id: "desc" }],
+        take: 5,
+        include: customerBookingInclude,
+      })
+      .then((rows) => rows.map(withTrip)),
   ]);
-  return { profile, sessions };
+
+  const counts = Object.fromEntries(countEntries) as Record<CustomerBookingTab, number>;
+  return { ...result, counts, live };
 }

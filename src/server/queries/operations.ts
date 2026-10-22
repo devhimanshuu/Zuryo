@@ -1,19 +1,23 @@
 import "server-only";
 import { getDb } from "@/lib/db";
+import { PAGE_SIZES, paginateRows } from "@/lib/pagination";
+
+const unassignedWhere = { trainerId: null, status: "PENDING" } as const;
 
 export async function getOperationsOverview() {
   const db = getDb();
-  const [byStatus, unassigned, recent, trainers] = await Promise.all([
+  const [byStatus, unassigned, unassignedCount, recent, trainers] = await Promise.all([
     db.booking.groupBy({ by: ["status"], _count: { _all: true } }),
     db.booking.findMany({
-      where: { trainerId: null, status: "PENDING" },
-      orderBy: { startAt: "asc" },
+      where: unassignedWhere,
+      orderBy: [{ startAt: "asc" }, { id: "asc" }],
       take: 20,
       include: {
         customer: { include: { user: { select: { name: true } } } },
         serviceZone: { select: { name: true } },
       },
     }),
+    db.booking.count({ where: unassignedWhere }),
     db.booking.findMany({
       orderBy: { updatedAt: "desc" },
       take: 6,
@@ -24,35 +28,54 @@ export async function getOperationsOverview() {
   const counts = Object.fromEntries(byStatus.map((s) => [s.status, s._count._all])) as Partial<
     Record<string, number>
   >;
-  return { counts, unassigned, recent, activeTrainers: trainers };
+  return { counts, unassigned, unassignedCount, recent, activeTrainers: trainers };
 }
 
-export async function getOperationsBookings() {
-  return getDb().booking.findMany({
-    orderBy: { startAt: "desc" },
-    take: 200,
-    include: {
-      customer: { include: { user: { select: { name: true } } } },
-      trainer: { include: { user: { select: { name: true } } } },
-      serviceZone: { select: { name: true } },
-      package: { select: { name: true } },
-      payments: { orderBy: { createdAt: "desc" }, select: { status: true, amount: true } },
-      packageEntries: { select: { reason: true } },
-    },
+const operationsBookingInclude = {
+  customer: { include: { user: { select: { name: true } } } },
+  trainer: { include: { user: { select: { name: true } } } },
+  serviceZone: { select: { name: true } },
+  package: { select: { name: true } },
+  payments: { orderBy: { createdAt: "desc" as const }, select: { status: true, amount: true } },
+  packageEntries: { select: { reason: true } },
+} as const;
+
+/** Newest bookings first, one page at a time with an exact total for the header. */
+export async function getOperationsBookings(page = 1, db = getDb()) {
+  return paginateRows({
+    page,
+    pageSize: PAGE_SIZES.operationsBookings,
+    count: () => db.booking.count(),
+    rows: (skip, take) =>
+      db.booking.findMany({
+        orderBy: [{ startAt: "desc" }, { id: "desc" }],
+        skip,
+        take,
+        include: operationsBookingInclude,
+      }),
   });
 }
 
-export async function getOperationsTrainers(now = new Date()) {
-  return getDb().trainerProfile.findMany({
-    orderBy: { user: { name: "asc" } },
-    take: 100,
-    include: {
-      user: { select: { name: true, email: true } },
-      serviceZone: { select: { name: true, latitude: true, longitude: true } },
-      _count: {
-        select: { bookings: { where: { startAt: { gte: now }, status: { in: ["CONFIRMED", "PENDING"] } } } },
-      },
-    },
+export async function getOperationsTrainers(page = 1, now = new Date(), db = getDb()) {
+  return paginateRows({
+    page,
+    pageSize: PAGE_SIZES.operationsTrainers,
+    count: () => db.trainerProfile.count(),
+    rows: (skip, take) =>
+      db.trainerProfile.findMany({
+        orderBy: [{ user: { name: "asc" } }, { userId: "asc" }],
+        skip,
+        take,
+        include: {
+          user: { select: { name: true, email: true } },
+          serviceZone: { select: { name: true, latitude: true, longitude: true } },
+          _count: {
+            select: {
+              bookings: { where: { startAt: { gte: now }, status: { in: ["CONFIRMED", "PENDING"] } } },
+            },
+          },
+        },
+      }),
   });
 }
 

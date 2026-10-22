@@ -1,5 +1,6 @@
 import "server-only";
 import type { NotificationType } from "@prisma/client";
+import { PAGE_SIZES, paginateRows } from "@/lib/pagination";
 import type { DbOrTx } from "@/server/booking/deps";
 
 export type NewNotification = {
@@ -25,22 +26,29 @@ export async function notify(db: DbOrTx, items: NewNotification[]): Promise<numb
   return res.count;
 }
 
-/** A user's own notifications, newest first. Recipients only ever read their own rows. */
-export async function listNotifications(db: DbOrTx, userId: string, take = 50) {
-  return db.notification.findMany({
-    where: { recipientId: userId },
-    orderBy: { createdAt: "desc" },
-    take,
-    select: {
-      id: true,
-      type: true,
-      title: true,
-      message: true,
-      bookingId: true,
-      packageId: true,
-      readAt: true,
-      createdAt: true,
-    },
+/** A user's own notifications, newest first, one page at a time. Recipients only read their rows. */
+export async function listNotifications(db: DbOrTx, userId: string, page = 1) {
+  return paginateRows({
+    page,
+    pageSize: PAGE_SIZES.notifications,
+    count: () => db.notification.count({ where: { recipientId: userId } }),
+    rows: (skip, take) =>
+      db.notification.findMany({
+        where: { recipientId: userId },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip,
+        take,
+        select: {
+          id: true,
+          type: true,
+          title: true,
+          message: true,
+          bookingId: true,
+          packageId: true,
+          readAt: true,
+          createdAt: true,
+        },
+      }),
   });
 }
 

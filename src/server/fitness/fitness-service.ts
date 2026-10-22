@@ -14,7 +14,13 @@ import { buildRuleBasedRecommendation, ruleBasedExplanation } from "@/lib/fitnes
 import { getServerEnv } from "@/lib/config/env.server";
 import { ACTIVE_BOOKING_STATUSES } from "@/lib/booking/rules";
 import { getDb } from "@/lib/db";
-import type { FitnessGoal, RecommendationFeedback, RecommendationSource, RecommendationStatus } from "@/lib/validation/enums";
+import { PAGE_SIZES, paginateRows } from "@/lib/pagination";
+import type {
+  FitnessGoal,
+  RecommendationFeedback,
+  RecommendationSource,
+  RecommendationStatus,
+} from "@/lib/validation/enums";
 import { fitnessProfileSchema, generateRecommendationSchema } from "@/lib/validation/fitness";
 import type { Actor } from "@/server/auth/actor";
 import type { BookingDeps, DbOrTx } from "@/server/booking/deps";
@@ -40,8 +46,8 @@ export function defaultFitnessDeps(): FitnessDeps {
 
 // ─── Dashboard reads ────────────────────────────────────────────────────
 
-export async function getFitnessDashboard(db: DbOrTx, customerId: string, now: Date) {
-  const [profile, goals, recommendations, stats, sessions] = await Promise.all([
+export async function getFitnessDashboard(db: DbOrTx, customerId: string, now: Date, page = 1) {
+  const [profile, goals, recommendationPage, stats, sessions] = await Promise.all([
     db.customerProfile.findUnique({
       where: { userId: customerId },
       select: {
@@ -61,10 +67,17 @@ export async function getFitnessDashboard(db: DbOrTx, customerId: string, now: D
       },
     }),
     db.fitnessGoalTracking.findMany({ where: { customerId }, orderBy: { goal: "asc" } }),
-    db.workoutRecommendation.findMany({
-      where: { customerId },
-      orderBy: { createdAt: "desc" },
-      take: 10,
+    paginateRows({
+      page,
+      pageSize: PAGE_SIZES.recommendations,
+      count: () => db.workoutRecommendation.count({ where: { customerId } }),
+      rows: (skip, take) =>
+        db.workoutRecommendation.findMany({
+          where: { customerId },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          skip,
+          take,
+        }),
     }),
     Promise.all([
       db.booking.count({ where: { customerId, status: "COMPLETED" } }),
@@ -91,7 +104,8 @@ export async function getFitnessDashboard(db: DbOrTx, customerId: string, now: D
   return {
     profile,
     goals,
-    recommendations,
+    recommendations: recommendationPage.rows,
+    recommendationPage,
     stats: {
       completedCount,
       completedLast30Days,
@@ -176,7 +190,11 @@ export async function saveFitnessProfile(
 // ─── Recommendation generation ──────────────────────────────────────────
 
 /** Loads the bounded context the provider (or fallback) is allowed to see. */
-async function loadRecommendationContext(db: DbOrTx, actor: Actor, goal: FitnessGoal): Promise<RecommendationContext | null> {
+async function loadRecommendationContext(
+  db: DbOrTx,
+  actor: Actor,
+  goal: FitnessGoal,
+): Promise<RecommendationContext | null> {
   const [profile, recent, counts, feedback] = await Promise.all([
     db.customerProfile.findUnique({
       where: { userId: actor.userId },
@@ -239,10 +257,9 @@ async function loadRecommendationContext(db: DbOrTx, actor: Actor, goal: Fitness
       completedAt: (b.sessionRecord?.completedAt ?? b.endAt).toISOString(),
     })),
     latestTrainerSuggestion:
-      recent.find((b) => b.sessionRecord?.suggestedNextWorkout)?.sessionRecord?.suggestedNextWorkout?.slice(
-        0,
-        CONTEXT_MAX_SUGGESTION_CHARS,
-      ) ?? null,
+      recent
+        .find((b) => b.sessionRecord?.suggestedNextWorkout)
+        ?.sessionRecord?.suggestedNextWorkout?.slice(0, CONTEXT_MAX_SUGGESTION_CHARS) ?? null,
     categoryCounts,
     recentFeedback: feedback
       .filter((f) => f.feedback !== null)
@@ -285,7 +302,10 @@ export async function generateRecommendation(
   const now = deps.now();
   const initialWait = cooldownRemainingMs(await latestGenerationAt(deps.db, actor.userId), now);
   if (initialWait > 0) {
-    return fail("CONFLICT", `Recommendations are limited to one per minute. Try again in ${Math.ceil(initialWait / 1000)}s.`);
+    return fail(
+      "CONFLICT",
+      `Recommendations are limited to one per minute. Try again in ${Math.ceil(initialWait / 1000)}s.`,
+    );
   }
 
   let output: ReturnType<typeof buildRuleBasedRecommendation>;
@@ -324,10 +344,7 @@ export async function generateRecommendation(
     accommodations: ctx.accommodations,
   };
 
-  const explanation =
-    source === "RULE_BASED"
-      ? ruleBasedExplanation(ctx)
-      : aiExplanation(ctx, payload.goal);
+  const explanation = source === "RULE_BASED" ? ruleBasedExplanation(ctx) : aiExplanation(ctx, payload.goal);
 
   try {
     return await deps.db.$transaction(async (tx) => {
@@ -444,7 +461,8 @@ export async function submitRecommendationFeedback(
   actor: Actor,
   raw: unknown,
 ): Promise<ServiceResult<{ recommendationId: string }>> {
-  if (actor.role !== "CUSTOMER") return fail("FORBIDDEN", "Only customers can rate their own recommendations.");
+  if (actor.role !== "CUSTOMER")
+    return fail("FORBIDDEN", "Only customers can rate their own recommendations.");
   const parsed = feedbackSchema.safeParse(raw);
   if (!parsed.success) return fail("VALIDATION", "Choose useful or not useful.");
   const res = await deps.db.workoutRecommendation.updateMany({
@@ -460,7 +478,9 @@ export async function submitRecommendationFeedback(
     : fail("NOT_FOUND", "We couldn't find that recommendation.");
 }
 
-const statusSchema = z.object({ recommendationId: z.string().trim().min(1).max(40), status: z.enum(["ACTIVE", "ARCHIVED"]) }).strict();
+const statusSchema = z
+  .object({ recommendationId: z.string().trim().min(1).max(40), status: z.enum(["ACTIVE", "ARCHIVED"]) })
+  .strict();
 
 export async function setRecommendationStatus(
   deps: BookingDeps,

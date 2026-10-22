@@ -112,7 +112,10 @@ describe("buying a package with the simulated checkout", () => {
     expect(afterDecline.status).toBe("PENDING_PAYMENT");
     expect(afterDecline.entries).toHaveLength(0);
     expect(afterDecline.payments).toHaveLength(1);
-    expect(afterDecline.payments[0]).toMatchObject({ status: "FAILED", failureReason: "Simulated decline (demo checkout)" });
+    expect(afterDecline.payments[0]).toMatchObject({
+      status: "FAILED",
+      failureReason: "Simulated decline (demo checkout)",
+    });
 
     const retried = await payForPackage(deps, alice, {
       packageId: id,
@@ -130,12 +133,13 @@ describe("buying a package with the simulated checkout", () => {
     const checkoutKey = randomUUID();
     const started = await startPackageCheckout(deps, alice, { planId: PLANS.starter, checkoutKey });
     if (!started.ok) throw new Error(started.error.message);
-    const body = { packageId: started.data.packageId, outcome: "SUCCEED" as const, idempotencyKey: randomUUID() };
+    const body = {
+      packageId: started.data.packageId,
+      outcome: "SUCCEED" as const,
+      idempotencyKey: randomUUID(),
+    };
 
-    const [a, b] = await Promise.all([
-      payForPackage(deps, alice, body),
-      payForPackage(deps, alice, body),
-    ]);
+    const [a, b] = await Promise.all([payForPackage(deps, alice, body), payForPackage(deps, alice, body)]);
     expect(a.ok && b.ok).toBe(true);
     if (!a.ok || !b.ok) return;
     expect(new Set([a.data.paymentId, b.data.paymentId]).size).toBe(1);
@@ -186,8 +190,8 @@ describe("buying a package with the simulated checkout", () => {
     if (!pay.ok) expect(pay.error.code).toBe("NOT_FOUND");
 
     const owned = await getCustomerPackages(db, alice.userId, NOW);
-    expect(owned.map((p) => p.id)).toContain(id);
-    expect((await getCustomerPackages(db, bob.userId, NOW)).map((p) => p.id)).not.toContain(id);
+    expect(owned.rows.map((p) => p.id)).toContain(id);
+    expect((await getCustomerPackages(db, bob.userId, NOW)).rows.map((p) => p.id)).not.toContain(id);
   });
 
   it("refuses package checkout for non-customers", async () => {
@@ -200,11 +204,7 @@ describe("buying a package with the simulated checkout", () => {
 describe("redeeming package sessions in bookings", () => {
   it("deducts exactly one session, records the ledger entry and marks coverage", async () => {
     const id = await buyStarter();
-    const res = await createBooking(
-      deps,
-      alice,
-      request({ payment: { method: "PACKAGE", packageId: id } }),
-    );
+    const res = await createBooking(deps, alice, request({ payment: { method: "PACKAGE", packageId: id } }));
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.data.coverage).toBe("PACKAGE");
@@ -227,11 +227,7 @@ describe("redeeming package sessions in bookings", () => {
 
   it("refuses to redeem another customer's package", async () => {
     const id = await buyStarter();
-    const res = await createBooking(
-      deps,
-      bob,
-      request({ payment: { method: "PACKAGE", packageId: id } }),
-    );
+    const res = await createBooking(deps, bob, request({ payment: { method: "PACKAGE", packageId: id } }));
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error.code).toBe("PACKAGE_UNAVAILABLE");
     expect((await packageRow(id)).usedSessions).toBe(0);
@@ -250,8 +246,15 @@ describe("redeeming package sessions in bookings", () => {
     if (!unpaid.ok) expect(unpaid.error.code).toBe("PACKAGE_UNAVAILABLE");
 
     const expired = await buyStarter();
-    await db.package.update({ where: { id: expired }, data: { expiresAt: new Date("2030-01-06T00:00:00Z") } });
-    const exp = await createBooking(deps, alice, request({ payment: { method: "PACKAGE", packageId: expired } }));
+    await db.package.update({
+      where: { id: expired },
+      data: { expiresAt: new Date("2030-01-06T00:00:00Z") },
+    });
+    const exp = await createBooking(
+      deps,
+      alice,
+      request({ payment: { method: "PACKAGE", packageId: expired } }),
+    );
     expect(exp.ok).toBe(false);
     if (!exp.ok) expect(exp.error.code).toBe("PACKAGE_UNAVAILABLE");
 
@@ -260,14 +263,22 @@ describe("redeeming package sessions in bookings", () => {
       where: { id: exhausted },
       data: { usedSessions: 5, status: "EXHAUSTED" },
     });
-    const exh = await createBooking(deps, alice, request({ payment: { method: "PACKAGE", packageId: exhausted } }));
+    const exh = await createBooking(
+      deps,
+      alice,
+      request({ payment: { method: "PACKAGE", packageId: exhausted } }),
+    );
     expect(exh.ok).toBe(false);
     if (!exh.ok) expect(exh.error.code).toBe("PACKAGE_UNAVAILABLE");
   });
 
   it("cannot deduct the same booking twice: the ledger's unique key rejects it", async () => {
     const id = await buyStarter();
-    const booking = await createBooking(deps, alice, request({ payment: { method: "PACKAGE", packageId: id } }));
+    const booking = await createBooking(
+      deps,
+      alice,
+      request({ payment: { method: "PACKAGE", packageId: id } }),
+    );
     if (!booking.ok) throw new Error(booking.error.message);
 
     await expect(
@@ -284,10 +295,17 @@ describe("redeeming package sessions in bookings", () => {
 
   it("restores the session on an eligible cancellation, at most once", async () => {
     const id = await buyStarter();
-    const booking = await createBooking(deps, alice, request({ payment: { method: "PACKAGE", packageId: id } }));
+    const booking = await createBooking(
+      deps,
+      alice,
+      request({ payment: { method: "PACKAGE", packageId: id } }),
+    );
     if (!booking.ok) throw new Error(booking.error.message);
 
-    const cancelled = await cancelBooking(deps, alice, { bookingId: booking.data.id, reason: "Plans changed" });
+    const cancelled = await cancelBooking(deps, alice, {
+      bookingId: booking.data.id,
+      reason: "Plans changed",
+    });
     expect(cancelled.ok).toBe(true);
     if (!cancelled.ok) return;
     expect(cancelled.data.restoredSession).toBe(true);
@@ -345,11 +363,7 @@ describe("pricing snapshots stay stable", () => {
 
     // A new booking at a standard time uses the new price (16:00 is outside peak and inside
     // arun's afternoon availability window).
-    const after = await createBooking(
-      deps,
-      bob,
-      request({ startAt: ist(TOMORROW, "16:00").toISOString() }),
-    );
+    const after = await createBooking(deps, bob, request({ startAt: ist(TOMORROW, "16:00").toISOString() }));
     expect(after.ok).toBe(true);
     if (!after.ok) return;
     expect(after.data.totalAmount).toBe("495.00");

@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { quoteSession, type ActivePricing, type PriceQuote } from "@/lib/booking/pricing";
+import { PAGE_SIZES, paginateRows, type PageResult } from "@/lib/pagination";
 import { fromPaise, toPaise } from "@/lib/pricing";
 import { AppError } from "@/lib/utils/errors";
 import { pricingConfigInputSchema, type PricingConfigInput } from "@/lib/validation/pricing";
@@ -66,45 +67,85 @@ export type PricingRuleView = {
   windows: Array<{ label: string; daysOfWeek: number[]; startMinute: number; endMinute: number }>;
 };
 
-/** Active rules plus recent versions, so operations can see what each historical booking was priced by. */
-export async function getPricingAdminView(db: DbOrTx): Promise<{
+type PricingRuleRecord = {
+  id: string;
+  kind: "NORMAL" | "PEAK";
+  name: string;
+  sessionPrice: { toString(): string };
+  commissionPercent: { toString(): string };
+  isActive: boolean;
+  effectiveFrom: Date;
+  peakWindows: Array<{ label: string; daysOfWeek: number[]; startMinute: number; endMinute: number }>;
+  createdBy: { name: string } | null;
+  _count: { bookings: number };
+};
+
+const pricingRuleInclude = {
+  peakWindows: { orderBy: [{ startMinute: "asc" as const }] },
+  createdBy: { select: { name: true } },
+  _count: { select: { bookings: true } },
+};
+
+function toPricingRuleView(r: PricingRuleRecord): PricingRuleView {
+  return {
+    id: r.id,
+    kind: r.kind,
+    name: r.name,
+    sessionPrice: r.sessionPrice.toString(),
+    commissionPercent: r.commissionPercent.toString(),
+    isActive: r.isActive,
+    effectiveFrom: r.effectiveFrom,
+    createdBy: r.createdBy?.name ?? null,
+    bookingCount: r._count.bookings,
+    windows: r.peakWindows.map((w) => ({
+      label: w.label,
+      daysOfWeek: [...w.daysOfWeek].sort((a, b) => a - b),
+      startMinute: w.startMinute,
+      endMinute: w.endMinute,
+    })),
+  };
+}
+
+/**
+ * The rules actually pricing bookings right now, fetched independently of the history page so the
+ * editor and the operations dashboard never lose them on page 2.
+ */
+export async function getActivePricingRules(
+  db: DbOrTx,
+): Promise<{ standard: PricingRuleView | null; peak: PricingRuleView | null }> {
+  const rules = await db.pricingRule.findMany({ where: { isActive: true }, include: pricingRuleInclude });
+  const view = rules.map(toPricingRuleView);
+  return {
+    standard: view.find((r) => r.kind === "NORMAL") ?? null,
+    peak: view.find((r) => r.kind === "PEAK") ?? null,
+  };
+}
+
+/** Active rules plus one page of version history, so operations can audit how bookings were priced. */
+export async function getPricingAdminView(
+  db: DbOrTx,
+  page = 1,
+): Promise<{
   standard: PricingRuleView | null;
   peak: PricingRuleView | null;
-  history: PricingRuleView[];
+  history: PageResult<PricingRuleView>;
 }> {
-  const rules = await db.pricingRule.findMany({
-    orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
-    take: 20,
-    include: {
-      peakWindows: { orderBy: [{ startMinute: "asc" }] },
-      createdBy: { select: { name: true } },
-      _count: { select: { bookings: true } },
-    },
-  });
-  const view = rules.map(
-    (r): PricingRuleView => ({
-      id: r.id,
-      kind: r.kind,
-      name: r.name,
-      sessionPrice: r.sessionPrice.toString(),
-      commissionPercent: r.commissionPercent.toString(),
-      isActive: r.isActive,
-      effectiveFrom: r.effectiveFrom,
-      createdBy: r.createdBy?.name ?? null,
-      bookingCount: r._count.bookings,
-      windows: r.peakWindows.map((w) => ({
-        label: w.label,
-        daysOfWeek: [...w.daysOfWeek].sort((a, b) => a - b),
-        startMinute: w.startMinute,
-        endMinute: w.endMinute,
-      })),
+  const [active, history] = await Promise.all([
+    getActivePricingRules(db),
+    paginateRows({
+      page,
+      pageSize: PAGE_SIZES.pricingHistory,
+      count: () => db.pricingRule.count(),
+      rows: (skip, take) =>
+        db.pricingRule.findMany({
+          orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+          skip,
+          take,
+          include: pricingRuleInclude,
+        }),
     }),
-  );
-  return {
-    standard: view.find((r) => r.isActive && r.kind === "NORMAL") ?? null,
-    peak: view.find((r) => r.isActive && r.kind === "PEAK") ?? null,
-    history: view,
-  };
+  ]);
+  return { ...active, history: { ...history, rows: history.rows.map(toPricingRuleView) } };
 }
 
 const money = (v: string) => fromPaise(toPaise(v));
@@ -145,7 +186,7 @@ export async function updatePricing(
 
   return deps.db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT "id" FROM "PricingRule" WHERE "isActive" FOR UPDATE`;
-    const current = await getPricingAdminView(tx);
+    const current = await getActivePricingRules(tx);
     if (
       current.standard?.id !== input.basedOn.standardRuleId ||
       (current.peak?.id ?? null) !== input.basedOn.peakRuleId
@@ -166,7 +207,10 @@ export async function updatePricing(
       money(current.peak.commissionPercent) !== money(input.peak.commissionPercent) ||
       !sameWindows(current.peak.windows, input.peak.windows);
     if (!standardChanged && !peakChanged) {
-      return fail<{ changed: Array<"NORMAL" | "PEAK"> }>("VALIDATION", "Nothing changed, so nothing was saved.");
+      return fail<{ changed: Array<"NORMAL" | "PEAK"> }>(
+        "VALIDATION",
+        "Nothing changed, so nothing was saved.",
+      );
     }
 
     const changed: Array<"NORMAL" | "PEAK"> = [];

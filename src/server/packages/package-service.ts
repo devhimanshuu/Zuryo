@@ -10,6 +10,7 @@ import {
   type PackageLike,
   type RedemptionBlocker,
 } from "@/lib/packages/packages";
+import { PAGE_SIZES, paginateRows } from "@/lib/pagination";
 import { formatINR } from "@/lib/pricing";
 import { formatDay } from "@/lib/utils/format";
 import {
@@ -34,7 +35,10 @@ const invalid = (error: z.ZodError) =>
 
 export async function listPlans(db: DbOrTx, now: Date) {
   const [plans, pricing] = await Promise.all([
-    db.packagePlan.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { sessionCount: "asc" }] }),
+    db.packagePlan.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { sessionCount: "asc" }],
+    }),
     loadActivePricing(db, now),
   ]);
   return {
@@ -53,29 +57,46 @@ export async function listPlans(db: DbOrTx, now: Date) {
 
 // ─── Customer-owned packages ────────────────────────────────────────────
 
-/** The acting customer's packages (never anyone else's), with ledger history and payments. */
-export async function getCustomerPackages(db: DbOrTx, customerId: string, now: Date) {
-  const rows = await db.package.findMany({
-    where: { customerId, status: { not: "CANCELLED" } },
-    orderBy: [{ purchasedAt: "desc" }],
-    take: 20,
-    include: {
-      plan: { select: { slug: true } },
-      entries: {
-        orderBy: { createdAt: "desc" },
-        include: { booking: { select: { id: true, reference: true, startAt: true, status: true } } },
-      },
-      payments: {
-        orderBy: { createdAt: "desc" },
-        select: { id: true, status: true, amount: true, createdAt: true, completedAt: true, providerReference: true },
-      },
-    },
+/** The acting customer's packages (never anyone else's), newest first, one page at a time. */
+export async function getCustomerPackages(db: DbOrTx, customerId: string, now: Date, page = 1) {
+  return paginateRows({
+    page,
+    pageSize: PAGE_SIZES.customerPackages,
+    count: () => db.package.count({ where: { customerId, status: { not: "CANCELLED" } } }),
+    rows: (skip, take) =>
+      db.package
+        .findMany({
+          where: { customerId, status: { not: "CANCELLED" } },
+          orderBy: [{ purchasedAt: "desc" }, { id: "desc" }],
+          skip,
+          take,
+          include: {
+            plan: { select: { slug: true } },
+            entries: {
+              orderBy: { createdAt: "desc" },
+              include: { booking: { select: { id: true, reference: true, startAt: true, status: true } } },
+            },
+            payments: {
+              orderBy: { createdAt: "desc" },
+              select: {
+                id: true,
+                status: true,
+                amount: true,
+                createdAt: true,
+                completedAt: true,
+                providerReference: true,
+              },
+            },
+          },
+        })
+        .then((rows) =>
+          rows.map((p) => ({
+            ...p,
+            effectiveStatus: effectiveStatus(p, now),
+            remaining: remainingSessions(p),
+          })),
+        ),
   });
-  return rows.map((p) => ({
-    ...p,
-    effectiveStatus: effectiveStatus(p, now),
-    remaining: remainingSessions(p),
-  }));
 }
 
 /** Packages that could cover a session, for the booking wizard's payment step (re-checked on submit). */
@@ -115,7 +136,10 @@ export async function startPackageCheckout(
   if (!parsed.success) return invalid(parsed.error);
   const { planId, checkoutKey } = parsed.data;
 
-  const existing = await deps.db.package.findUnique({ where: { checkoutKey }, select: { id: true, customerId: true, planId: true } });
+  const existing = await deps.db.package.findUnique({
+    where: { checkoutKey },
+    select: { id: true, customerId: true, planId: true },
+  });
   if (existing) {
     return existing.customerId === actor.userId && existing.planId === planId
       ? ok({ packageId: existing.id })
@@ -150,7 +174,10 @@ export async function startPackageCheckout(
     return ok({ packageId: pkg.id });
   } catch (err) {
     if (!isUniqueViolationOn(err, "checkoutKey")) throw err;
-    const again = await deps.db.package.findUnique({ where: { checkoutKey }, select: { id: true, customerId: true } });
+    const again = await deps.db.package.findUnique({
+      where: { checkoutKey },
+      select: { id: true, customerId: true },
+    });
     return again?.customerId === actor.userId
       ? ok({ packageId: again.id })
       : fail("CONFLICT", "This checkout request was already used. Refresh and try again.");
@@ -180,7 +207,10 @@ type LockedPackage = {
 };
 
 /** Row-locks a package so balance changes and activation for it happen one at a time. */
-export async function lockPackage(tx: Prisma.TransactionClient, packageId: string): Promise<LockedPackage | null> {
+export async function lockPackage(
+  tx: Prisma.TransactionClient,
+  packageId: string,
+): Promise<LockedPackage | null> {
   const rows = await tx.$queryRaw<LockedPackage[]>`
     SELECT "id", "customerId", "status", "totalSessions", "usedSessions", "expiresAt", "name",
            "pricePaid", "basePrice", "commissionAmount", "validityDays"
@@ -231,7 +261,8 @@ export async function payForPackage(
   try {
     return await deps.db.$transaction(async (tx): Promise<ServiceResult<PackagePaymentResult>> => {
       const pkg = await lockPackage(tx, packageId);
-      if (!pkg || pkg.customerId !== actor.userId) return fail("NOT_FOUND", "We couldn't find that checkout.");
+      if (!pkg || pkg.customerId !== actor.userId)
+        return fail("NOT_FOUND", "We couldn't find that checkout.");
       if (pkg.status === "CANCELLED") {
         return fail("CONFLICT", "This checkout was discarded. Start a new one from Packages.");
       }
@@ -271,11 +302,17 @@ export async function payForPackage(
             dedupeKey: `payment-failed:${payment.id}`,
           },
         ]);
-        return fail("PAYMENT_FAILED", "The simulated payment was declined. Your package wasn't activated; you can try again.");
+        return fail(
+          "PAYMENT_FAILED",
+          "The simulated payment was declined. Your package wasn't activated; you can try again.",
+        );
       }
 
       const expiresAt = expiryFrom(now, pkg.validityDays ?? 30);
-      await tx.package.update({ where: { id: packageId }, data: { status: "ACTIVE", purchasedAt: now, expiresAt } });
+      await tx.package.update({
+        where: { id: packageId },
+        data: { status: "ACTIVE", purchasedAt: now, expiresAt },
+      });
       await notify(tx, [
         {
           recipientId: actor.userId,
