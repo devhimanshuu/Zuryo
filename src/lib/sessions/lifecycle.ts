@@ -97,3 +97,21 @@ export function reconcileDecision(
 export function completionFor(s: SessionClock, now: Date): { completedAt: Date; source: "TRAINER" | "DEADLINE" } {
   return now >= s.endsAt ? { completedAt: s.endsAt, source: "DEADLINE" } : { completedAt: now, source: "TRAINER" };
 }
+
+/** How late a tick may still sound a cue: a phone waking a minute after the mark still buzzes. */
+export const BUZZER_GRACE_MS = 2 * 60_000;
+
+export type BuzzerCue = "warning" | "end";
+
+/**
+ * The buzzer cue the countdown crossed between two ticks, if any. Only crossings seen live count,
+ * and only shortly after the mark, so a reload (or a phone woken long after) stays quiet. The cue is
+ * a convenience for the person in the room: the server records the warning and the end regardless.
+ */
+export function buzzerCue(s: Pick<SessionClock, "endsAt">, prev: Date, now: Date): BuzzerCue | null {
+  const crossed = (mark: Date) =>
+    prev < mark && now >= mark && now.getTime() - mark.getTime() <= BUZZER_GRACE_MS;
+  if (crossed(s.endsAt)) return "end";
+  if (crossed(warningAt(s))) return "warning";
+  return null;
+}

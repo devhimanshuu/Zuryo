@@ -1,19 +1,22 @@
 "use client";
 
-import { CircleCheck, Hourglass, Play, Square, TimerReset } from "lucide-react";
+import { CircleCheck, Hourglass, Play, Square, TimerReset, Volume2, VolumeX } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Notice } from "@/components/shared/states";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { SESSION_WARNING_BEFORE_END_MINUTES } from "@/lib/booking/rules";
-import { sessionPhase, warningAt, type SessionClock } from "@/lib/sessions/lifecycle";
+import { buzzerCue, sessionPhase, warningAt, type BuzzerCue, type SessionClock } from "@/lib/sessions/lifecycle";
 import { cn } from "@/lib/utils/cn";
 import { formatTime } from "@/lib/utils/format";
 import type { BookingStatus } from "@/lib/validation/enums";
 import { completeSessionAction, startSessionAction, syncSessionAction } from "@/server/actions/sessions";
 import type { SessionState } from "@/server/sessions/session-service";
+import { buzz, buzzerReady, unlockBuzzer } from "./buzzer";
+
+const SOUND_KEY = "zuryo:buzzer-sound";
 
 function toClock(s: SessionState): SessionClock | null {
   if (!s.startedAt || !s.endsAt) return null;
@@ -54,12 +57,26 @@ export function SessionConsole({
   const [state, setState] = useState(initial);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  // serverNow − clientNow at load: the countdown uses the server's clock, not the device's.
-  const offset = useMemo(() => Date.parse(initial.serverNow) - Date.now(), [initial.serverNow]);
+  // serverNow − clientNow: the countdown runs on the server's clock, not the device's. Measured at
+  // load, then re-measured on every server reply (midpoint of the round trip), so a device clock
+  // that drifts or is changed mid-session is corrected within a minute.
+  const [offset, setOffset] = useState(() => Date.parse(initial.serverNow) - Date.now());
   const [now, setNow] = useState(() => new Date(Date.now() + offset));
   const synced = useRef<Set<string>>(new Set());
+  const prevNow = useRef(now);
+  const [sound, setSound] = useState(true);
+  const [flash, setFlash] = useState<BuzzerCue | null>(null);
+  const resync = (serverNow: string, sentAt: number) =>
+    setOffset(Date.parse(serverNow) - (sentAt + Date.now()) / 2);
 
   useEffect(() => setState(initial), [initial]);
+  useEffect(() => {
+    try {
+      setSound(localStorage.getItem(SOUND_KEY) !== "off");
+    } catch {
+      // Storage blocked: keep the default (sound on).
+    }
+  }, []);
   useEffect(() => {
     const t = setInterval(() => setNow(new Date(Date.now() + offset)), 1000);
     return () => clearInterval(t);
@@ -80,24 +97,71 @@ export function SessionConsole({
     const next = marks.find((m) => m.due && !synced.current.has(m.key));
     if (!next) return;
     synced.current.add(next.key);
+    const sentAt = Date.now();
     void syncSessionAction({ bookingId: state.bookingId })
       .then((res) => {
         if (!res.ok) return;
+        resync(res.data.serverNow, sentAt);
         setState(res.data);
         if (res.data.changed) router.refresh();
       })
       .catch(() => synced.current.delete(next.key));
   }, [now, status, clock, state.bookingId, state.warningSentAt, router]);
 
+  // The buzzer: sound + vibration when the countdown crosses 55 and 60 minutes while this screen is
+  // open. Each cue plays once per session per tab, so a reload doesn't repeat it.
+  useEffect(() => {
+    const prev = prevNow.current;
+    prevNow.current = now;
+    if (status !== "IN_PROGRESS" || !clock) return;
+    const cue = buzzerCue(clock, prev, now);
+    if (!cue) return;
+    const key = `zuryo:buzz:${state.bookingId}:${cue}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, "1");
+    } catch {
+      // Storage blocked: buzz anyway; at worst a reload repeats the cue.
+    }
+    buzz(cue, { sound });
+    setFlash(cue);
+  }, [now, status, clock, state.bookingId, sound]);
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(null), 6000);
+    return () => clearTimeout(t);
+  }, [flash]);
+  // Browsers only allow sound after a gesture: any tap on the page arms the buzzer.
+  useEffect(() => {
+    if (status !== "IN_PROGRESS" && status !== "CONFIRMED") return;
+    const arm = () => void unlockBuzzer();
+    document.addEventListener("pointerdown", arm);
+    return () => document.removeEventListener("pointerdown", arm);
+  }, [status]);
+
+  function toggleSound() {
+    const next = !sound;
+    setSound(next);
+    try {
+      localStorage.setItem(SOUND_KEY, next ? "on" : "off");
+    } catch {
+      // Not persisted; the choice still applies on this screen.
+    }
+    if (next && unlockBuzzer()) buzz("warning", { sound: true });
+  }
+
   function run(action: typeof startSessionAction, okMessage: (s: SessionState) => string) {
     setError(null);
+    unlockBuzzer();
     startTransition(async () => {
       try {
+        const sentAt = Date.now();
         const res = await action({ bookingId: state.bookingId });
         if (!res.ok) {
           setError(res.error.message);
           return;
         }
+        resync(res.data.serverNow, sentAt);
         setState(res.data);
         toast.success(okMessage(res.data));
         router.refresh();
@@ -116,10 +180,30 @@ export function SessionConsole({
     : 0;
 
   return (
-    <div className="grid gap-5 rounded-lg border border-hairline bg-raised p-5 sm:p-6">
+    <div
+      className={cn(
+        "grid gap-5 rounded-lg border border-hairline bg-raised p-5 shadow-(--shadow-1) transition-shadow sm:p-6",
+        flash === "warning" && "animate-pulse ring-4 ring-warning/40",
+        flash === "end" && "animate-pulse ring-4 ring-danger/40",
+      )}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-eyebrow font-semibold tracking-[0.08em] text-ink-muted uppercase">Live session</p>
-        <StatusBadge status={status} />
+        <div className="flex items-center gap-2">
+          {status === "IN_PROGRESS" || status === "CONFIRMED" ? (
+            <button
+              type="button"
+              onClick={toggleSound}
+              aria-pressed={sound}
+              title={sound ? "Buzzer sound is on" : "Buzzer sound is off"}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-hairline px-2.5 text-body-sm font-semibold text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
+            >
+              {sound ? <Volume2 className="size-4" aria-hidden /> : <VolumeX className="size-4" aria-hidden />}
+              Buzzer {sound ? "on" : "off"}
+            </button>
+          ) : null}
+          <StatusBadge status={status} />
+        </div>
       </div>
 
       {status === "CONFIRMED" ? (
@@ -204,6 +288,11 @@ export function SessionConsole({
                 Wrap-up reminder at {formatTime(warningAt(clock), tz)}. You can end the session from then.
               </p>
             )}
+            {sound && !buzzerReady() ? (
+              <p className="mt-2 text-body-sm text-ink-subtle">
+                Tap anywhere on this screen to let the buzzer play sound at 55 and 60 minutes.
+              </p>
+            ) : null}
           </div>
           <div>
             <Button

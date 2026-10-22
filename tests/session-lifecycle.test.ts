@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buzzerCue,
   completeBlocker,
   completionFor,
   reconcileDecision,
@@ -103,5 +104,30 @@ describe("completion", () => {
     expect(completionFor(session(), min(57))).toEqual({ completedAt: min(57), source: "TRAINER" });
     expect(completionFor(session(), min(60))).toEqual({ completedAt: min(60), source: "DEADLINE" });
     expect(completionFor(session(), min(95))).toEqual({ completedAt: min(60), source: "DEADLINE" });
+  });
+});
+
+describe("buzzer cues", () => {
+  const s = session();
+
+  it("sounds the warning when a tick crosses 55 minutes and the end when it crosses 60", () => {
+    expect(buzzerCue(s, min(54, 59), min(55))).toBe("warning");
+    expect(buzzerCue(s, min(59, 59), min(60))).toBe("end");
+  });
+
+  it("stays quiet between marks and on a tick that doesn't cross one", () => {
+    expect(buzzerCue(s, min(30), min(30, 1))).toBeNull();
+    expect(buzzerCue(s, min(55), min(55, 1))).toBeNull(); // already past the warning
+    expect(buzzerCue(s, min(56), min(56))).toBeNull(); // first tick after a reload
+  });
+
+  it("prefers the end cue when one late tick spans both marks", () => {
+    expect(buzzerCue(s, min(54), min(60, 30))).toBe("end");
+  });
+
+  it("doesn't buzz long after the mark, e.g. a phone woken minutes later", () => {
+    expect(buzzerCue(s, min(50), min(57))).toBe("warning"); // 2 minutes late: still useful
+    expect(buzzerCue(s, min(50), min(57, 1))).toBeNull();
+    expect(buzzerCue(s, min(50), min(63))).toBeNull();
   });
 });

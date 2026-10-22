@@ -16,6 +16,7 @@ import { sessionFeedbackSchema, sessionSummarySchema } from "@/lib/validation/se
 import type { Actor } from "@/server/auth/actor";
 import type { BookingDeps, DbOrTx } from "@/server/booking/deps";
 import { fail, ok, type ServiceResult } from "@/server/booking/errors";
+import { withTrip } from "@/server/location/trip";
 import { notify } from "@/server/notifications/notification-service";
 
 /**
@@ -279,7 +280,7 @@ export async function getSessionForTrainer(deps: BookingDeps, actor: Actor, book
   const owned = await deps.db.booking.findFirst({ where: { id: bookingId, trainerId: actor.userId }, select: { id: true } });
   if (!owned) return null;
   await reconcileSession(deps, bookingId);
-  return deps.db.booking.findUnique({
+  const row = await deps.db.booking.findUnique({
     where: { id: bookingId },
     include: {
       customer: {
@@ -290,12 +291,14 @@ export async function getSessionForTrainer(deps: BookingDeps, actor: Actor, book
           user: { select: { name: true } },
         },
       },
-      serviceZone: { select: { name: true, timezone: true } },
+      serviceZone: { select: { name: true, timezone: true, latitude: true, longitude: true } },
+      trainer: { select: { baseLatitude: true, baseLongitude: true } },
       sessionRecord: true,
       package: { select: { name: true } },
       payments: { where: { status: { in: ["SUCCEEDED", "REFUNDED"] } }, select: { status: true } },
     },
   });
+  return row ? withTrip(row) : null;
 }
 
 /**
