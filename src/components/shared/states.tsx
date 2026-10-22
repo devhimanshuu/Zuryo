@@ -8,6 +8,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { SpotIllustration } from "./spot-illustration";
 
 const NOTICE = {
   info: { className: "bg-info-soft text-info", Icon: Info },
@@ -62,16 +63,23 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "relative grid justify-items-center gap-2 overflow-hidden rounded-lg border border-dashed border-control/50 bg-raised px-5 py-10 text-center",
+        "relative isolate grid justify-items-center gap-2 overflow-hidden rounded-lg border border-dashed border-control/50 bg-raised px-5 py-10 text-center",
         className,
       )}
     >
-      <span
-        className="mb-2 grid size-12 place-items-center rounded-full bg-brand-soft text-brand ring-8 ring-brand-soft/40"
+      <div aria-hidden className="bg-dot-grid fade-radial pointer-events-none absolute inset-0 -z-10 text-brand/15" />
+      <div
         aria-hidden
-      >
-        <Icon className="size-5" />
-      </span>
+        className="pointer-events-none absolute -top-16 left-1/2 -z-10 size-52 -translate-x-1/2 rounded-full bg-brand-soft/60 blur-3xl"
+      />
+      <div className="relative mb-2 h-24 w-40" aria-hidden>
+        <SpotIllustration className="h-full w-full" />
+        <span className="absolute inset-0 grid place-items-center">
+          <span className="grid size-10 place-items-center rounded-full bg-raised/90 text-brand shadow-(--shadow-1) ring-4 ring-brand-soft/60 backdrop-blur-sm">
+            <Icon className="size-5" />
+          </span>
+        </span>
+      </div>
       <h3 className="text-heading-md font-semibold">{title}</h3>
       {body ? <p className="max-w-[44ch] text-ink-muted">{body}</p> : null}
       {action ? <div className="mt-2">{action}</div> : null}
@@ -89,8 +97,12 @@ export function ErrorState({
   return (
     <div
       role="alert"
-      className="flex gap-3 rounded-lg border border-danger/30 bg-danger-soft p-4 text-danger"
+      className="relative isolate flex gap-3 overflow-hidden rounded-lg border border-danger/30 bg-danger-soft p-4 text-danger"
     >
+      <SpotIllustration
+        variant="error"
+        className="pointer-events-none absolute -right-5 -bottom-7 -z-10 h-28 w-40 opacity-30"
+      />
       <CircleAlert className="mt-0.5 size-5 shrink-0" aria-hidden />
       <div>
         <p className="font-semibold">{title}</p>

@@ -1,0 +1,10 @@
+import { DetailSkeleton, HeaderSkeleton, PageSkeleton } from "@/components/shared/loading-skeletons";
+
+export default function Loading() {
+  return (
+    <PageSkeleton label="Loading booking details">
+      <HeaderSkeleton editorial />
+      <DetailSkeleton />
+    </PageSkeleton>
+  );
+}

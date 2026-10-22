@@ -1,6 +1,8 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils/cn";
+
+export type Crumb = { href?: string; label: React.ReactNode };
 
 export function PageHeader({
   eyebrow,
@@ -9,6 +11,7 @@ export function PageHeader({
   actions,
   editorial,
   back,
+  breadcrumbs,
   className,
 }: {
   eyebrow?: React.ReactNode;
@@ -19,11 +22,38 @@ export function PageHeader({
   editorial?: boolean;
   /** Link back to the parent list, shown above the title. */
   back?: { href: string; label: string };
+  /** Optional trail above the title; the last item is the current page. */
+  breadcrumbs?: Crumb[];
   className?: string;
 }) {
   return (
     <header className={cn("grid gap-3 pb-6", className)}>
-      {back ? (
+      {breadcrumbs && breadcrumbs.length > 0 ? (
+        <nav aria-label="Breadcrumb">
+          <ol className="flex flex-wrap items-center gap-1 text-sm font-semibold text-ink-muted">
+            {breadcrumbs.map((crumb, i) => {
+              const isLast = i === breadcrumbs.length - 1;
+              return (
+                <li key={i} className="flex min-w-0 items-center gap-1">
+                  {i > 0 ? <ChevronRight className="size-3.5 shrink-0 text-ink-subtle" aria-hidden /> : null}
+                  {crumb.href && !isLast ? (
+                    <Link href={crumb.href} className="truncate hover:text-ink">
+                      {crumb.label}
+                    </Link>
+                  ) : (
+                    <span
+                      aria-current={isLast ? "page" : undefined}
+                      className={cn("truncate", isLast && "text-ink")}
+                    >
+                      {crumb.label}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
+      ) : back ? (
         <Link
           href={back.href}
           className="group inline-flex w-fit items-center gap-1.5 text-sm font-semibold text-ink-muted hover:text-ink"
