@@ -63,3 +63,17 @@ export async function markAllRead(db: DbOrTx, userId: string, now: Date): Promis
   });
   return res.count;
 }
+
+/** Marks one row, scoped to its recipient so a guessed id can never touch someone else's inbox. */
+export async function markRead(
+  db: DbOrTx,
+  userId: string,
+  notificationId: string,
+  now: Date,
+): Promise<number> {
+  const res = await db.notification.updateMany({
+    where: { id: notificationId, recipientId: userId, readAt: null },
+    data: { readAt: now },
+  });
+  return res.count;
+}

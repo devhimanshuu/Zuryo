@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/shared/page-header";
 import { Pagination } from "@/components/shared/pagination";
 import { ErrorState } from "@/components/shared/states";
-import { MarkReadButton } from "@/features/notifications/mark-read-button";
 import { NotificationList } from "@/features/notifications/notification-list";
 import { getDb } from "@/lib/db";
 import { parsePage } from "@/lib/pagination";
@@ -37,11 +36,10 @@ export default async function CustomerNotificationsPage({
         editorial
         title="Updates"
         description={`In-app notifications for ${actor.name}. ${unread ? `${unread} unread.` : "All caught up."}`}
-        actions={<MarkReadButton as="CUSTOMER" disabled={unread === 0} />}
       />
       <NotificationList
         items={list.rows}
-        bookingHref={(id) => `/customer/bookings/${id}`}
+        variant="CUSTOMER"
         packageHref="/customer/packages"
       />
       <Pagination pathname="/customer/notifications" result={list} itemLabel="updates" />

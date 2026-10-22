@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/shared/page-header";
 import { Pagination } from "@/components/shared/pagination";
 import { ErrorState } from "@/components/shared/states";
-import { MarkReadButton } from "@/features/notifications/mark-read-button";
 import { NotificationList } from "@/features/notifications/notification-list";
 import { getDb } from "@/lib/db";
 import { parsePage } from "@/lib/pagination";
@@ -36,9 +35,8 @@ export default async function TrainerNotificationsPage({
       <PageHeader
         title="Updates"
         description={`Notifications for ${actor.name}. ${unread ? `${unread} unread.` : "All caught up."}`}
-        actions={<MarkReadButton as="TRAINER" disabled={unread === 0} />}
       />
-      <NotificationList items={list.rows} bookingHref={(id) => `/trainer/sessions/${id}`} />
+      <NotificationList items={list.rows} variant="TRAINER" />
       <Pagination pathname="/trainer/notifications" result={list} itemLabel="updates" />
     </div>
   );
