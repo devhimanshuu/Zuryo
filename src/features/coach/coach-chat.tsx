@@ -96,7 +96,7 @@ export function CoachChat() {
     height: number;
     moved: boolean;
   } | null>(null);
-  const suppressClickUntil = useRef(0);
+  const suppressClick = useRef(false);
 
   // Rendered into <body> once mounted: the workspace frame animates with a transform, which would
   // otherwise anchor this "fixed" launcher to the page content instead of the window. The saved
@@ -189,6 +189,8 @@ export function CoachChat() {
   // plain tap still opens the panel; a real drag swallows the click that follows it.
   function startDrag(event: React.PointerEvent<HTMLButtonElement>) {
     if (event.button !== 0) return;
+    // A fresh press is a fresh interaction: only the click manufactured by this drag is ignored.
+    suppressClick.current = false;
     const rect = event.currentTarget.getBoundingClientRect();
     dragRef.current = {
       pointerId: event.pointerId,
@@ -237,7 +239,7 @@ export function CoachChat() {
       /* not captured */
     }
     if (!drag.moved) return;
-    suppressClickUntil.current = Date.now() + 350;
+    suppressClick.current = true;
     const saved = posRef.current;
     if (!saved) return;
     try {
@@ -248,7 +250,10 @@ export function CoachChat() {
   }
 
   function openFromClick() {
-    if (Date.now() < suppressClickUntil.current) return;
+    if (suppressClick.current) {
+      suppressClick.current = false;
+      return;
+    }
     toggle();
   }
 

@@ -56,6 +56,61 @@ test.describe("fitness coach", () => {
     expect(viewport!.height - (launcher!.y + launcher!.height)).toBeLessThan(64);
   });
 
+  test("the launcher can be dragged, stays on screen and remembers where it was dropped", async ({
+    page,
+  }) => {
+    await signInAsCustomer(page);
+
+    const launcher = page.getByRole("button", { name: "Ask the coach" });
+    const before = await launcher.boundingBox();
+    expect(before).not.toBeNull();
+
+    await page.mouse.move(before!.x + before!.width / 2, before!.y + before!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(before!.x + before!.width / 2 - 220, before!.y + before!.height / 2 - 160, {
+      steps: 8,
+    });
+    await page.mouse.up();
+
+    const after = await launcher.boundingBox();
+    expect(after).not.toBeNull();
+    expect(Math.abs(after!.x - (before!.x - 220))).toBeLessThan(4);
+    expect(Math.abs(after!.y - (before!.y - 160))).toBeLessThan(4);
+    // Moving the launcher must not toggle the panel.
+    await expect(page.getByRole("dialog", { name: "Coach" })).toBeHidden();
+
+    // The dropped position survives a reload.
+    await page.reload();
+    const kept = await page.getByRole("button", { name: "Ask the coach" }).boundingBox();
+    expect(kept).not.toBeNull();
+    expect(Math.abs(kept!.x - after!.x)).toBeLessThan(2);
+    expect(Math.abs(kept!.y - after!.y)).toBeLessThan(2);
+
+    // It keeps its place while moving between customer screens.
+    await page
+      .getByRole("navigation", { name: "Workspace" })
+      .getByRole("link", { name: "My bookings" })
+      .click();
+    await page.waitForURL("**/customer/bookings");
+    const afterNav = await page.getByRole("button", { name: "Ask the coach" }).boundingBox();
+    expect(afterNav).not.toBeNull();
+    expect(Math.abs(afterNav!.x - kept!.x)).toBeLessThan(2);
+    expect(Math.abs(afterNav!.y - kept!.y)).toBeLessThan(2);
+
+    // The panel opens beside the launcher, never on top of it.
+    await launcher.click();
+    const panel = page.getByRole("dialog", { name: "Coach" });
+    await expect(panel).toBeVisible();
+    const panelBox = await panel.boundingBox();
+    expect(panelBox).not.toBeNull();
+    const overlaps =
+      panelBox!.x < kept!.x + kept!.width &&
+      panelBox!.x + panelBox!.width > kept!.x &&
+      panelBox!.y < kept!.y + kept!.height &&
+      panelBox!.y + panelBox!.height > kept!.y;
+    expect(overlaps).toBe(false);
+  });
+
   test("answers an emergency from the safety guard", async ({ page }) => {
     await signInAsCustomer(page);
     await openCoach(page);
