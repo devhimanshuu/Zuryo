@@ -7,12 +7,14 @@ import {
 } from "@/lib/fitness/recommendation-schema";
 
 /**
- * Server-only AI provider abstraction. Two vendors are integrated behind one interface:
- *   - OpenRouter (OpenAI-compatible chat completions with a forced function call), used when
- *     OPENROUTER_API_KEY is set — the configuration this project is demonstrated with;
- *   - the Anthropic Messages API (tool call), used when only ANTHROPIC_API_KEY is set.
- * The recommendation service only sees `AiProvider`, so vendors can change without touching the
- * business logic, and with neither key set every request uses the rule-based fallback.
+ * Server-only AI provider abstraction. Three vendors are integrated behind one interface:
+ *   - Groq (OpenAI-compatible chat completions, free tier), tried first when GROQ_API_KEY is set;
+ *   - OpenRouter (OpenAI-compatible, free models with routing), next when OPENROUTER_API_KEY is set;
+ *   - the Anthropic Messages API (tool call), used only when neither of those keys is set.
+ * With several keys the providers form a failover chain: a rate limit, timeout or bad answer from
+ * one moves on to the next. The recommendation service only sees `AiProvider`, so vendors can
+ * change without touching the business logic, and with no key every request uses the rule-based
+ * fallback.
  *
  * The provider never sees anything beyond the bounded RecommendationContext; it cannot book, price
  * or mutate anything, and its output is validated against the recommendation schema before use.
@@ -55,6 +57,12 @@ export type AiProvider = {
 
 export const ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1/messages";
 export const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+export const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
+/**
+ * Default Groq models (free tier), tried in order: gpt-oss-120b for quality, then Qwen. Groq's
+ * catalogue changes; set GROQ_MODEL (comma-separated for a fallback list) to override.
+ */
+export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b,qwen/qwen3.8-27b";
 /** Current Haiku: the cheapest Claude model, enough for a short structured plan. */
 export const DEFAULT_ANTHROPIC_MODEL = "claude-haiku-5-5";
 /**
@@ -330,8 +338,126 @@ export function openRouterProvider(opts: OpenRouterProviderOptions = {}): AiProv
   };
 }
 
+export type GroqProviderOptions = {
+  apiKey?: string;
+  /** One model id, or a comma-separated list tried in order. */
+  model?: string;
+  fetchFn?: typeof fetch;
+  timeoutMs?: number;
+};
+
+/** Failures worth retrying on the next model or provider; anything else is final. */
+const RETRYABLE: ReadonlySet<ProviderFailureKind> = new Set([
+  "RATE_LIMITED",
+  "TIMEOUT",
+  "PROVIDER_ERROR",
+  "INVALID_OUTPUT",
+  "UNCONFIGURED",
+]);
+
+/**
+ * Groq's OpenAI-compatible chat completions with the plan schema as a forced function call. Groq
+ * has no server-side model routing, so a comma-separated model list is tried here, in order.
+ * gpt-oss models are reasoning models: they get low reasoning effort, which keeps a short plan fast.
+ */
+export function groqProvider(opts: GroqProviderOptions = {}): AiProvider {
+  const apiKey = opts.apiKey;
+  const model = opts.model ?? DEFAULT_GROQ_MODEL;
+  const models = model
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean);
+  const fetchFn = opts.fetchFn ?? fetch;
+  const timeoutMs = opts.timeoutMs ?? 20_000;
+
+  return {
+    model: `groq:${model}`,
+    async generateRecommendation(ctx, hooks): Promise<RecommendationOutput> {
+      if (!apiKey) {
+        throw new AiProviderError("UNCONFIGURED", "GROQ_API_KEY is not set");
+      }
+      let lastError: AiProviderError | null = null;
+      for (const m of models) {
+        try {
+          const json = await postJson(
+            fetchFn,
+            GROQ_ENDPOINT,
+            { authorization: `Bearer ${apiKey}` },
+            {
+              model: m,
+              max_completion_tokens: 4000,
+              temperature: 0.4,
+              ...(m.startsWith("openai/gpt-oss") ? { reasoning_effort: "low" } : {}),
+              messages: [
+                { role: "system", content: SYSTEM_PROMPT },
+                { role: "user", content: contextToPrompt(ctx) },
+              ],
+              tools: [
+                {
+                  type: "function",
+                  function: { name: TOOL_NAME, description: TOOL_DESCRIPTION, parameters: OUTPUT_JSON_SCHEMA },
+                },
+              ],
+              tool_choice: { type: "function", function: { name: TOOL_NAME } },
+            },
+            timeoutMs,
+          );
+          const usage = (json as { usage?: { prompt_tokens?: unknown; completion_tokens?: unknown } })?.usage;
+          const inputTokens = count(usage?.prompt_tokens);
+          const outputTokens = count(usage?.completion_tokens);
+          const finish = (json as { choices?: Array<{ finish_reason?: unknown }> })?.choices?.[0]?.finish_reason;
+          if (finish === "length") {
+            throw new AiProviderError("INVALID_OUTPUT", "The AI provider's answer was cut off at the token limit");
+          }
+          const plan = validatePlan(extractChatCompletionPlan(json));
+          if (inputTokens !== null && outputTokens !== null) hooks?.onUsage?.({ inputTokens, outputTokens });
+          hooks?.onServedBy?.(`groq:${m}`);
+          return plan;
+        } catch (err) {
+          lastError =
+            err instanceof AiProviderError ? err : new AiProviderError("PROVIDER_ERROR", "Unexpected provider failure", err);
+          if (!RETRYABLE.has(lastError.kind)) throw lastError;
+        }
+      }
+      throw lastError ?? new AiProviderError("UNCONFIGURED", "No Groq model configured");
+    },
+  };
+}
+
+/**
+ * Tries providers in order and returns the first valid plan. A retryable failure moves on to the
+ * next provider; the last failure is what the caller sees (and logs) when every provider failed.
+ */
+export function chainProviders(providers: AiProvider[]): AiProvider {
+  if (providers.length === 1) return providers[0]!;
+  return {
+    model: providers.map((p) => p.model).join(" > "),
+    async generateRecommendation(ctx, hooks): Promise<RecommendationOutput> {
+      let lastError: AiProviderError | null = null;
+      for (const provider of providers) {
+        try {
+          let served: string | null = null;
+          const plan = await provider.generateRecommendation(ctx, {
+            onUsage: hooks?.onUsage,
+            onServedBy: (m) => (served = m),
+          });
+          hooks?.onServedBy?.(served ?? provider.model);
+          return plan;
+        } catch (err) {
+          lastError =
+            err instanceof AiProviderError ? err : new AiProviderError("PROVIDER_ERROR", "Unexpected provider failure", err);
+          if (!RETRYABLE.has(lastError.kind)) throw lastError;
+        }
+      }
+      throw lastError ?? new AiProviderError("UNCONFIGURED", "No AI provider configured");
+    },
+  };
+}
+
 /** The env subset that decides which provider runs. */
 export type AiProviderEnv = {
+  GROQ_API_KEY?: string;
+  GROQ_MODEL?: string;
   OPENROUTER_API_KEY?: string;
   OPENROUTER_MODEL?: string;
   ANTHROPIC_API_KEY?: string;
@@ -340,13 +466,17 @@ export type AiProviderEnv = {
 };
 
 /**
- * OpenRouter when its key is set, else Anthropic (which reports UNCONFIGURED without a key, so the
- * service falls back to the rule-based plan and labels it honestly).
+ * Groq, then OpenRouter, for whichever keys are set (both free tiers, chained for failover). With
+ * neither, Anthropic, which reports UNCONFIGURED without its key, so the service falls back to the
+ * rule-based plan and labels it honestly.
  */
 export function aiProviderFromEnv(env: AiProviderEnv): AiProvider {
+  const chain: AiProvider[] = [];
+  if (env.GROQ_API_KEY) chain.push(groqProvider({ apiKey: env.GROQ_API_KEY, model: env.GROQ_MODEL }));
   if (env.OPENROUTER_API_KEY) {
-    return openRouterProvider({ apiKey: env.OPENROUTER_API_KEY, model: env.OPENROUTER_MODEL, appUrl: env.APP_URL });
+    chain.push(openRouterProvider({ apiKey: env.OPENROUTER_API_KEY, model: env.OPENROUTER_MODEL, appUrl: env.APP_URL }));
   }
+  if (chain.length > 0) return chainProviders(chain);
   return anthropicProvider({ apiKey: env.ANTHROPIC_API_KEY || undefined, model: env.ANTHROPIC_MODEL });
 }
 
