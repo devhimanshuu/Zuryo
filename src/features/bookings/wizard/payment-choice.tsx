@@ -2,6 +2,7 @@
 
 import { CreditCard, Package } from "lucide-react";
 import Link from "next/link";
+import { InfoTip } from "@/components/shared/info-tip";
 import { formatINR } from "@/lib/pricing";
 import { cn } from "@/lib/utils/cn";
 import { formatDay } from "@/lib/utils/format";
@@ -46,7 +47,13 @@ export function PaymentChoice({
   return (
     <div className="grid gap-3">
       <fieldset className="grid gap-3">
-        <legend className="mb-1 font-semibold">How would you like to pay?</legend>
+        <legend className="mb-1 flex items-center gap-1.5 font-semibold">
+          How would you like to pay?
+          <InfoTip label="Simulated payments">
+            This demo never charges a real card. You can choose a successful or declined simulated
+            payment to see both paths; nothing is sent to a payment provider.
+          </InfoTip>
+        </legend>
         {packages.map((p) => {
           const ok = usable.has(p.id);
           return (
@@ -87,7 +94,9 @@ export function PaymentChoice({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block font-semibold">Pay {formatINR(total)} now</span>
-            <span className="block text-body-sm text-ink-muted">Simulated payment for this session only.</span>
+            <span className="block text-body-sm text-ink-muted">
+              Simulated payment for this session only. No real card is charged.
+            </span>
           </span>
         </label>
       </fieldset>

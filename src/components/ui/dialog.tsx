@@ -14,7 +14,7 @@ export function DialogContent({
   children,
   side = "center",
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content> & { side?: "center" | "left" }) {
+}: React.ComponentProps<typeof DialogPrimitive.Content> & { side?: "center" | "left" | "right" }) {
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 animate-fade-in bg-inverse/40" />
@@ -24,6 +24,8 @@ export function DialogContent({
           side === "center" &&
             "top-1/2 left-1/2 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 animate-fade-in rounded-lg p-6",
           side === "left" && "inset-y-0 left-0 flex w-[min(20rem,86vw)] animate-sheet-in flex-col",
+          side === "right" &&
+            "inset-y-0 right-0 flex w-[min(34rem,100vw)] animate-sheet-in-right flex-col overflow-y-auto",
           className,
         )}
         {...props}

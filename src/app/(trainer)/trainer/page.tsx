@@ -6,6 +6,7 @@ import { ErrorState, EmptyState } from "@/components/shared/states";
 import { Metric } from "@/components/shared/metric";
 import { Card, CardContent, CardHeader, CardIcon, CardLink, CardTitle } from "@/components/ui/card";
 import { ScheduleRow } from "@/features/bookings/schedule-row";
+import { OnboardingChecklist } from "@/features/onboarding/onboarding-checklist";
 import { categoryLabel } from "@/lib/booking/categories";
 import { safely } from "@/lib/utils/errors";
 import { formatDay, formatSlot, formatTime } from "@/lib/utils/format";
@@ -26,7 +27,7 @@ export default async function TrainerOverviewPage() {
     return getTrainerOverview(actor.userId, dayStart, addDays(dayStart, 1));
   });
   if (!result.ok) return <ErrorState message={result.error.message} />;
-  const { profile, today, upcoming, upcomingCount, notifications } = result.data;
+  const { profile, today, upcoming, upcomingCount, notifications, setup } = result.data;
   const next = [...today, ...upcoming].find((b) => b.endAt > now && b.status !== "COMPLETED");
   const live = today.find((b) => b.status === "IN_PROGRESS");
 
@@ -39,6 +40,42 @@ export default async function TrainerOverviewPage() {
           profile ? `${profile.serviceZone.name} · ${profile.specializations.join(", ")}` : undefined
         }
         className="pb-0"
+      />
+
+      <OnboardingChecklist
+        storageKey={`zuryo-trainer-onboarding:${actor.userId}`}
+        title={`Set up your week, ${actor.name.split(" ")[0]}`}
+        description="Open time, meet your first customer and close the loop with notes."
+        steps={[
+          {
+            id: "availability",
+            title: "Open your availability",
+            body: "Customers can only book the hours you publish.",
+            href: "/trainer/availability",
+            done: setup.availabilityCount > 0,
+          },
+          {
+            id: "first-session",
+            title: "Get your first session",
+            body: "Assigned sessions appear in your schedule and updates.",
+            href: "/trainer/sessions",
+            done: setup.assignedCount > 0,
+          },
+          {
+            id: "complete",
+            title: "Complete a session",
+            body: "Start and finish a live session from its detail page.",
+            href: "/trainer/sessions?tab=completed",
+            done: setup.completedCount > 0,
+          },
+          {
+            id: "notes",
+            title: "Add notes after a session",
+            body: "Notes and a next workout help customers keep momentum.",
+            href: "/trainer/sessions?tab=completed",
+            done: setup.notesCount > 0,
+          },
+        ]}
       />
 
       {live ? (

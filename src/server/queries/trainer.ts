@@ -15,7 +15,8 @@ export async function getTrainerOverview(userId: string, dayStart: Date, dayEnd:
     startAt: { gte: dayEnd },
     status: { in: ["CONFIRMED", "PENDING"] },
   };
-  const [profile, today, upcoming, upcomingCount, notifications] = await Promise.all([
+  const [profile, today, upcoming, upcomingCount, notifications, availabilityCount, assignedCount, completedCount, notesCount] =
+    await Promise.all([
     db.trainerProfile.findUnique({ where: { userId }, include: { serviceZone: { select: { name: true } } } }),
     db.booking.findMany({
       where: {
@@ -34,8 +35,19 @@ export async function getTrainerOverview(userId: string, dayStart: Date, dayEnd:
     }),
     db.booking.count({ where: upcomingWhere }),
     db.notification.findMany({ where: { recipientId: userId }, orderBy: { createdAt: "desc" }, take: 5 }),
+    db.trainerAvailability.count({ where: { trainerId: userId, startAt: { gte: dayStart } } }),
+    db.booking.count({ where: { trainerId: userId } }),
+    db.booking.count({ where: { trainerId: userId, status: "COMPLETED" } }),
+    db.sessionRecord.count({ where: { booking: { trainerId: userId }, trainerNotes: { not: null } } }),
   ]);
-  return { profile, today, upcoming, upcomingCount, notifications };
+  return {
+    profile,
+    today,
+    upcoming,
+    upcomingCount,
+    notifications,
+    setup: { availabilityCount, assignedCount, completedCount, notesCount },
+  };
 }
 
 export const TRAINER_SESSION_TABS = ["upcoming", "completed", "cancelled", "missed"] as const;

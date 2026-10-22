@@ -18,16 +18,20 @@ import {
 } from "lucide-react";
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/shared/page-header";
+import { AnimatedNumber } from "@/components/shared/animated-number";
 import { ErrorState, EmptyState } from "@/components/shared/states";
 import { Metric } from "@/components/shared/metric";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { TrendChart } from "@/components/shared/trend-chart";
 import { Card, CardContent, CardHeader, CardIcon, CardLink, CardTitle } from "@/components/ui/card";
 import { ScheduleRow } from "@/features/bookings/schedule-row";
 import { ReconcileButton } from "@/features/operations/reconcile-button";
 import { getDb } from "@/lib/db";
+import { localDateKey } from "@/lib/booking/time";
 import { calculatePriceBreakdown, formatINR } from "@/lib/pricing";
+import { dailySeries } from "@/lib/trend";
 import { safely } from "@/lib/utils/errors";
-import { formatSlot, formatTime } from "@/lib/utils/format";
+import { DEFAULT_TZ, formatSlot, formatTime } from "@/lib/utils/format";
 import { getActivePricingRules } from "@/server/booking/pricing-service";
 import { getAiUsage } from "@/server/fitness/fitness-service";
 import { getOperationsFinance, getOperationsOverview } from "@/server/queries/operations";
@@ -48,8 +52,37 @@ export default async function OperationsOverviewPage() {
     return { ...overview, finance, attention, pricing, ai };
   });
   if (!result.ok) return <ErrorState message={result.error.message} />;
-  const { counts, unassigned, unassignedCount, recent, activeTrainers, finance, attention, pricing, ai } =
-    result.data;
+  const {
+    counts,
+    unassigned,
+    unassignedCount,
+    recent,
+    activeTrainers,
+    finance,
+    attention,
+    pricing,
+    ai,
+    trendBookings,
+    trendRevenue,
+  } = result.data;
+  const todayKey = localDateKey(new Date(), DEFAULT_TZ);
+  const bookingSeries = dailySeries(
+    trendBookings.map((at) => ({ at, value: 1 })),
+    todayKey,
+    DEFAULT_TZ,
+    28,
+  );
+  const revenueSeries = dailySeries(
+    trendRevenue.map((p) => ({ at: p.at, value: Number(p.amount) })),
+    todayKey,
+    DEFAULT_TZ,
+    28,
+  );
+  const bookingTrend = bookingSeries.slice(-14);
+  const revenueTrend = revenueSeries.slice(-14);
+  const previousBookings = bookingSeries.slice(0, 14).reduce((n, p) => n + p.value, 0);
+  const previousRevenue = revenueSeries.slice(0, 14).reduce((n, p) => n + p.value, 0);
+  const revenueTotal = revenueTrend.reduce((n, p) => n + p.value, 0);
   const total = Object.values(counts).reduce<number>((s, n) => s + (n ?? 0), 0);
   const needsAttention = attention.overdueCount + attention.notStartedCount;
   const packageFigures: Array<[string, number]> = [
@@ -79,18 +112,80 @@ export default async function OperationsOverviewPage() {
         className="pb-0"
       />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Metric label="Total bookings" value={total} icon={ListChecks} />
-        <Metric label="Confirmed" value={counts.CONFIRMED ?? 0} icon={CalendarCheck} />
-        <Metric label="In progress" value={counts.IN_PROGRESS ?? 0} icon={PlayCircle} tone="accent" />
-        <Metric label="Completed" value={counts.COMPLETED ?? 0} icon={CircleCheck} tone="success" />
+        <Metric label="Total bookings" value={<AnimatedNumber value={total} />} icon={ListChecks} />
+        <Metric label="Confirmed" value={<AnimatedNumber value={counts.CONFIRMED ?? 0} />} icon={CalendarCheck} />
+        <Metric
+          label="In progress"
+          value={<AnimatedNumber value={counts.IN_PROGRESS ?? 0} />}
+          icon={PlayCircle}
+          tone="accent"
+        />
+        <Metric
+          label="Completed"
+          value={<AnimatedNumber value={counts.COMPLETED ?? 0} />}
+          icon={CircleCheck}
+          tone="success"
+        />
         <Metric
           label="Cancelled / failed"
-          value={(counts.CANCELLED ?? 0) + (counts.FAILED ?? 0)}
+          value={<AnimatedNumber value={(counts.CANCELLED ?? 0) + (counts.FAILED ?? 0)} />}
           foot={`${counts.FAILED ?? 0} with a declined payment`}
           icon={Ban}
           tone="muted"
         />
       </div>
+
+      <section aria-labelledby="trend-h" className="grid gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <h2 id="trend-h" className="text-heading-md font-semibold">
+            Last 14 days
+          </h2>
+          <p className="text-body-sm text-ink-muted">
+            Bookings created and successful simulated payments, by day.
+          </p>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <div>
+                <CardTitle>Bookings created</CardTitle>
+                <p className="text-body-sm text-ink-muted">New bookings per day, by creation time.</p>
+              </div>
+              <CardIcon icon={ListChecks} />
+            </CardHeader>
+            <CardContent>
+              <TrendChart
+                points={bookingTrend}
+                label="Bookings created"
+                total={`${bookingTrend.reduce((n, p) => n + p.value, 0)} bookings`}
+                valueNoun="booking"
+                previousTotal={previousBookings}
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <div>
+                <CardTitle>Payments received</CardTitle>
+                <p className="text-body-sm text-ink-muted">
+                  Successful simulated payments per day, before refunds.
+                </p>
+              </div>
+              <CardIcon icon={Wallet} />
+            </CardHeader>
+            <CardContent>
+              <TrendChart
+                points={revenueTrend}
+                label="Payments received"
+                total={formatINR(revenueTotal.toFixed(2))}
+                currency
+                valueNoun="payment"
+                previousTotal={previousRevenue}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      </section>
 
       <section aria-labelledby="money-h" className="grid gap-3">
         <div className="flex flex-wrap items-end justify-between gap-2">
@@ -104,20 +199,20 @@ export default async function OperationsOverviewPage() {
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Metric
             label="Successful payments"
-            value={formatINR(finance.succeeded.total)}
+            value={<AnimatedNumber value={Number(finance.succeeded.total)} currency />}
             foot={`${finance.payments.SUCCEEDED?.count ?? 0} payments · ${finance.succeeded.packageCount} for packages`}
             icon={CreditCard}
             tone="success"
           />
           <Metric
             label="Society commission"
-            value={formatINR(finance.succeeded.commission)}
+            value={<AnimatedNumber value={Number(finance.succeeded.commission)} currency />}
             foot="From successful payments; package sessions count once, at purchase"
             icon={HandCoins}
           />
           <Metric
             label="Net after commission"
-            value={formatINR(finance.succeeded.net)}
+            value={<AnimatedNumber value={Number(finance.succeeded.net)} currency />}
             foot="Session and package prices, excluding commission"
             icon={Wallet}
           />
