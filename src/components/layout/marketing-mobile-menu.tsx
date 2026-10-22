@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Wordmark } from "@/components/shared/wordmark";
+import { ThemeControl } from "./theme-control";
 
 /** Under 768px the marketing nav links move into a slide-in sheet, so every page stays reachable. */
 export function MarketingMobileMenu({ links }: { links: { href: string; label: string }[] }) {
@@ -45,6 +46,10 @@ export function MarketingMobileMenu({ links }: { links: { href: string; label: s
           </ul>
         </nav>
         <div className="grid gap-2 border-t border-hairline p-4">
+          <div className="mb-1 flex items-center justify-between gap-2 px-1">
+            <span className="text-body-sm font-semibold text-ink-muted">Theme</span>
+            <ThemeControl />
+          </div>
           <Button asChild variant="primary" size="lg">
             <Link href="/customer/bookings/new" onClick={close}>
               Book a trainer

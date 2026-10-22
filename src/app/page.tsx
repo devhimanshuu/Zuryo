@@ -396,7 +396,7 @@ function TrainerPreview() {
       </div>
       <div className="container-page grid gap-12 lg:grid-cols-2 lg:items-center lg:gap-16">
         <div>
-          <p className="flex items-center gap-3 text-eyebrow font-semibold tracking-[0.08em] text-ink-inverse/60 uppercase">
+          <p className="flex items-center gap-3 text-eyebrow font-semibold tracking-[0.08em] text-ink-inverse/70 uppercase">
             <span className="h-px w-6 bg-success-inverse" aria-hidden />
             For trainers
           </p>
@@ -441,7 +441,7 @@ function TrainerPreview() {
             <div className="absolute inset-y-0 left-0 w-[38%] rounded-full bg-success-inverse" />
             <div className="absolute -inset-y-1 left-[91.6%] w-0.5 bg-ink-inverse/60" />
           </div>
-          <div className="mt-2 flex justify-between text-[12px] text-ink-inverse/60" aria-hidden>
+          <div className="mt-2 flex justify-between text-[12px] text-ink-inverse/70" aria-hidden>
             <span>0</span>
             <span>55</span>
             <span>60 min</span>

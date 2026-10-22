@@ -13,7 +13,7 @@ export const buttonVariants = cva(
         instant: "bg-accent text-on-accent hover:brightness-95",
         secondary: "border-control bg-raised text-ink hover:bg-sunken",
         ghost: "text-ink hover:bg-sunken",
-        inverse: "bg-ink-inverse text-ink hover:bg-white",
+        inverse: "bg-ink-inverse text-ink hover:bg-ink-inverse/90",
         danger: "bg-danger text-on-danger hover:brightness-95",
         link: "h-auto px-0 text-brand underline-offset-4 hover:underline",
       },

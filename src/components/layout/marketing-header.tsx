@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Wordmark } from "@/components/shared/wordmark";
 import { MarketingMobileMenu } from "./marketing-mobile-menu";
+import { ThemeControl } from "./theme-control";
 
 export const MARKETING_LINKS = [
   { href: "/how-it-works", label: "How it works" },
@@ -30,6 +31,9 @@ export function MarketingHeader() {
           </ul>
         </nav>
         <div className="ml-auto flex items-center gap-2">
+          <div className="hidden md:block">
+            <ThemeControl />
+          </div>
           <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
             <Link href="/sign-in">Sign in</Link>
           </Button>

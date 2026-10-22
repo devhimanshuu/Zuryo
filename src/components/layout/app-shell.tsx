@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import { ROLE_HOME, type Role } from "@/lib/validation/enums";
 import { cn } from "@/lib/utils/cn";
 import { AccountPanel } from "./account-panel";
+import { CommandPalette, CommandTrigger } from "./command-palette";
 import { LiveRefresh } from "./live-refresh";
 import { MobileNav } from "./mobile-nav";
 import { NAV } from "./nav-config";
 import { NavLinks, type NavBadges } from "./nav-links";
+import { ThemeControl } from "./theme-control";
 
 /**
  * Shared workspace frame for all three roles: sidebar on desktop, top bar + drawer on smaller
@@ -38,6 +40,7 @@ export function AppShell({
       </a>
 
       <LiveRefresh />
+      <CommandPalette role={role} />
 
       <aside className="sticky top-0 hidden h-dvh flex-col border-r border-hairline bg-raised lg:flex">
         <SidebarContent role={role} accountName={accountName} badges={badges} />
@@ -49,16 +52,20 @@ export function AppShell({
             <SidebarContent role={role} accountName={accountName} badges={badges} />
           </MobileNav>
           <Wordmark href={home} className="text-2xl" />
-          <WorkspacePill role={role} />
-          <span className="ml-auto pr-2" title={accountName}>
-            <Avatar name={accountName} size="sm" />
+          <WorkspacePill role={role} className="hidden sm:inline-block" />
+          <span className="ml-auto flex items-center gap-1">
+            <CommandTrigger variant="icon" />
+            <ThemeControl />
+            <span className="pr-2" title={accountName}>
+              <Avatar name={accountName} size="sm" />
+            </span>
           </span>
         </header>
         <main
           id="main"
           className={cn("container-page py-6 lg:py-10", role === "CUSTOMER" && "pb-28 lg:pb-10")}
         >
-          {children}
+          <div className="min-w-0 animate-rise">{children}</div>
         </main>
       </div>
 
@@ -74,9 +81,14 @@ export function AppShell({
   );
 }
 
-function WorkspacePill({ role }: { role: Role }) {
+function WorkspacePill({ role, className }: { role: Role; className?: string }) {
   return (
-    <span className="mt-0.5 rounded-full bg-sunken px-2 py-0.5 text-[10px] font-semibold tracking-[0.08em] text-ink-muted uppercase">
+    <span
+      className={cn(
+        "mt-0.5 rounded-full bg-sunken px-2 py-0.5 text-[10px] font-semibold tracking-[0.08em] text-ink-muted uppercase",
+        className,
+      )}
+    >
       {NAV[role].title}
     </span>
   );
@@ -108,6 +120,9 @@ function SidebarContent({
           </Button>
         </div>
       ) : null}
+      <div className="px-3 pt-2">
+        <CommandTrigger />
+      </div>
       <nav aria-label="Workspace" className="min-h-0 flex-1 overflow-y-auto px-3 pt-5">
         <p
           className="px-3 pb-2 text-[11px] font-semibold tracking-[0.08em] text-ink-subtle uppercase"
