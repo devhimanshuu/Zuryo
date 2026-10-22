@@ -38,9 +38,12 @@ const serverEnv: Record<string, string> = {
   ...process.env,
   DATABASE_URL: testUrl,
   AUTH_SECRET: process.env.AUTH_SECRET ?? "e2e-local-secret-not-for-production-use",
-  // No AI keys: every recommendation uses the deterministic rule-based fallback during E2E.
+  // No AI keys: every recommendation uses the deterministic rule-based fallback during E2E, and
+  // the coach answers from its rule-based replies. Every provider key is blanked, so a developer's
+  // local free-tier key can't turn these specs into live (and non-deterministic) API calls.
   ANTHROPIC_API_KEY: "",
   OPENROUTER_API_KEY: "",
+  GROQ_API_KEY: "",
 };
 if (testDirectUrl) serverEnv.DIRECT_URL = testDirectUrl;
 

@@ -38,10 +38,14 @@ test.describe("authentication", () => {
     await page.waitForLoadState("networkidle");
     await page.getByRole("button", { name: "Sign out" }).click();
 
-    // `signOut()` posts to clear the session cookie and then navigates. Under suite load the
-    // navigation can race the cookie clear: middleware sees a live session and bounces /sign-in
-    // back to /customer. Poll the session endpoint until it is genuinely gone, regardless of
-    // which page the browser currently shows.
+    // `signOut()` posts to clear the session cookie and then navigates to the sign-in page. Let
+    // that navigation finish before touching the page again, or the next `goto` is reported as
+    // "interrupted by another navigation".
+    await page.waitForURL(/\/sign-in/);
+
+    // Under suite load the navigation can race the cookie clear: middleware sees a live session
+    // and bounces /sign-in back to /customer. Poll the session endpoint until it is genuinely
+    // gone, regardless of which page the browser currently shows.
     await expect
       .poll(
         async () => {
