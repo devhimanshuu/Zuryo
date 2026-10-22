@@ -1,7 +1,9 @@
 "use client";
 
 import { CalendarX2, RotateCcw } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { InfoTip } from "@/components/shared/info-tip";
 import { addMinutes, localMinuteOfDay, zonedDayStart } from "@/lib/booking/time";
 import { formatINR } from "@/lib/pricing";
 import { cn } from "@/lib/utils/cn";
@@ -70,6 +72,11 @@ export function SlotPicker({
   const nextOpenDay = day
     ? schedule.days.find((d) => d.dateKey > day.dateKey && d.availableCount > 0)
     : undefined;
+  const selectedDay = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    selectedDay.current?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }, [day?.dateKey]);
 
   if (!day) return null;
   const labels = dayLabels(day, schedule.todayKey, tz);
@@ -83,39 +90,47 @@ export function SlotPicker({
     <div className="grid gap-5">
       <fieldset className="min-w-0">
         <legend className="mb-2 text-sm font-semibold">Date</legend>
-        <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pt-0.5 pb-2">
-          {schedule.days.map((d) => {
-            const l = dayLabels(d, schedule.todayKey, tz);
-            const isSelected = d.dateKey === day.dateKey;
-            return (
-              <button
-                key={d.dateKey}
-                type="button"
-                aria-pressed={isSelected}
-                aria-label={`${l.long}, ${d.availableCount === 0 ? "no open slots" : `${d.availableCount} open slots`}`}
-                onClick={() => onDate(d.dateKey)}
-                className={cn(
-                  "grid w-[4.75rem] shrink-0 snap-start justify-items-center gap-0.5 rounded-md border px-2 py-2.5 text-center transition-colors",
-                  isSelected
-                    ? "border-brand bg-brand text-on-brand"
-                    : "border-hairline bg-raised hover:border-control",
-                  !isSelected && d.availableCount === 0 && "text-ink-subtle",
-                )}
-              >
-                <span className="text-[11px] font-semibold tracking-wide uppercase">{l.relative}</span>
-                <span className="text-sm font-semibold tabular">{l.date}</span>
-                <span
+        <div className="relative">
+          <div className="flex snap-x gap-2 overflow-x-auto px-1 pt-0.5 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {schedule.days.map((d) => {
+              const l = dayLabels(d, schedule.todayKey, tz);
+              const isSelected = d.dateKey === day.dateKey;
+              return (
+                <button
+                  key={d.dateKey}
+                  ref={isSelected ? selectedDay : undefined}
+                  type="button"
+                  aria-pressed={isSelected}
+                  aria-label={`${l.long}, ${d.availableCount === 0 ? "no open slots" : `${d.availableCount} open slots`}`}
+                  onClick={() => onDate(d.dateKey)}
                   className={cn(
-                    "text-[11px] tabular",
-                    isSelected ? "text-on-brand/85" : d.availableCount ? "text-brand" : "text-ink-subtle",
+                    "grid w-[4.75rem] shrink-0 snap-start justify-items-center gap-0.5 rounded-md border px-2 py-2.5 text-center transition-colors",
+                    isSelected
+                      ? "border-brand bg-brand text-on-brand"
+                      : "border-hairline bg-raised hover:border-control",
+                    !isSelected && d.availableCount === 0 && "text-ink-subtle",
                   )}
                 >
-                  {d.availableCount ? `${d.availableCount} open` : "No slots"}
-                </span>
-              </button>
-            );
-          })}
+                  <span className="text-[11px] font-semibold tracking-wide uppercase">{l.relative}</span>
+                  <span className="text-sm font-semibold tabular">{l.date}</span>
+                  <span
+                    className={cn(
+                      "text-[11px] tabular",
+                      isSelected ? "text-on-brand/85" : d.availableCount ? "text-brand" : "text-ink-subtle",
+                    )}
+                  >
+                    {d.availableCount ? `${d.availableCount} open` : "No slots"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-raised to-transparent"
+          />
         </div>
+        <p className="mt-1 text-body-sm text-ink-subtle sm:hidden">Swipe the dates to see more days.</p>
       </fieldset>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -125,6 +140,12 @@ export function SlotPicker({
             <span key={String(p.isPeak)} className="inline-flex items-center gap-1.5">
               <span className={cn("size-2 rounded-full", p.isPeak ? "bg-accent" : "bg-brand")} aria-hidden />
               {p.isPeak ? "Peak" : "Standard"} {formatINR(p.totalAmount)}
+              {p.isPeak ? (
+                <InfoTip label="Peak pricing">
+                  Peak hours are busier, so the session costs more. Your exact total is fixed when you
+                  confirm.
+                </InfoTip>
+              ) : null}
             </span>
           ))}
           <Button type="button" variant="ghost" size="sm" onClick={onRefresh}>

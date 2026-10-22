@@ -32,7 +32,11 @@ export default async function PackageCheckoutPage({ params }: { params: Promise<
     <div className="grid max-w-3xl gap-6">
       <PageHeader
         editorial
-        back={{ href: "/customer/packages", label: "Packages" }}
+        breadcrumbs={[
+          { href: "/customer", label: "Home" },
+          { href: "/customer/packages", label: "Packages" },
+          { label: pending ? "Checkout" : "Receipt" },
+        ]}
         title={pending ? "Checkout" : "Package paid"}
         description={`${pkg.name} for ${actor.name}. The price was fixed when checkout started.`}
         className="pb-0"

@@ -1,7 +1,18 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, ArrowRight, CalendarClock, Clock, MapPin, RotateCcw, SearchX, Zap } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CalendarClock,
+  ChevronDown,
+  ClipboardList,
+  Clock,
+  MapPin,
+  RotateCcw,
+  SearchX,
+  Zap,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useForm } from "react-hook-form";
@@ -12,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { categoryLabel } from "@/lib/booking/categories";
+import { CANCELLATION_POLICY_NOTE } from "@/lib/booking/cancellation";
 import {
   INSTANT_MIN_LEAD_MINUTES,
   INSTANT_WINDOW_MINUTES,
@@ -70,6 +82,10 @@ export type WizardProps = {
 
 const workoutFormSchema = z.object({ workoutCategory: workoutCategorySchema, notes: bookingNotesSchema });
 
+const DRAFT_KEY = "zuryo-booking-draft";
+
+type BookingDraft = { mode?: BookingMode | null; category?: WorkoutCategory | null; notes?: string };
+
 const noopSubscribe = () => () => {};
 
 export function BookingWizard({ customer, categories, packages, initialMode, initialCategory }: WizardProps) {
@@ -96,6 +112,7 @@ export function BookingWizard({ customer, categories, packages, initialMode, ini
   const [submitError, setSubmitError] = useState<ServiceError | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [paymentChoice, setPaymentChoice] = useState<BookingPayment | null>(null);
+  const [draftRestored, setDraftRestored] = useState(false);
 
   // Latest-request guards: a slow response for an old selection never overwrites a newer one.
   const scheduleSeq = useRef(0);
@@ -118,6 +135,71 @@ export function BookingWizard({ customer, categories, packages, initialMode, ini
       defaultValues: { workoutCategory: initialCategory ?? undefined, notes: "" },
     },
   );
+  const draftNotes = workoutForm.watch("notes") ?? "";
+
+  // Restore an unfinished choice (never a slot or price — those are re-checked server-side).
+  useEffect(() => {
+    if (!hydrated || initialMode || initialCategory) return;
+    let draft: BookingDraft | null = null;
+    try {
+      draft = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null") as BookingDraft | null;
+    } catch {
+      return;
+    }
+    if (!draft || typeof draft !== "object") return;
+    const nextMode = draft.mode === "INSTANT" || draft.mode === "SCHEDULED" ? draft.mode : null;
+    const nextCategory = workoutCategorySchema.safeParse(draft.category);
+    const nextNotes = typeof draft.notes === "string" ? draft.notes.slice(0, NOTES_MAX_LENGTH) : "";
+    if (!nextMode && !nextCategory.success && !nextNotes) return;
+    if (nextMode) {
+      setMode(nextMode);
+      setStep("workout");
+    }
+    if (nextCategory.success) {
+      setCategory(nextCategory.data);
+      workoutForm.setValue("workoutCategory", nextCategory.data);
+    }
+    if (nextNotes) {
+      workoutForm.setValue("notes", nextNotes);
+      setNotes(nextNotes);
+    }
+    setDraftRestored(true);
+  }, [hydrated, initialMode, initialCategory, workoutForm]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const timer = window.setTimeout(() => {
+      if (!mode && !category && !draftNotes) return;
+      try {
+        localStorage.setItem(
+          DRAFT_KEY,
+          JSON.stringify({ mode, category, notes: draftNotes } satisfies BookingDraft),
+        );
+      } catch {
+        // Storage can be unavailable in private modes; the wizard still works without a draft.
+      }
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [hydrated, mode, category, draftNotes]);
+
+  function startOver() {
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      // Ignore unavailable storage.
+    }
+    setDraftRestored(false);
+    setMode(initialMode ?? null);
+    setCategory(null);
+    setNotes("");
+    setStartAt(null);
+    setTrainerId(null);
+    setMatch({ status: "idle" });
+    setSubmitError(null);
+    setPaymentChoice(null);
+    setStep(initialMode ? "workout" : "type");
+    workoutForm.reset({ workoutCategory: initialCategory ?? undefined, notes: "" });
+  }
 
   // ─── Data loading ───────────────────────────────────────────────────────
 
@@ -247,6 +329,11 @@ export function BookingWizard({ customer, categories, packages, initialMode, ini
       idempotencyKey: idempotency.current.key,
     });
     if (res.ok) {
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch {
+        // The booking succeeded; a stale draft is harmless if storage is unavailable.
+      }
       router.push(`/customer/bookings/${res.data.id}?created=1`);
       return; // keep the button busy while the confirmation page loads
     }
@@ -284,6 +371,49 @@ export function BookingWizard({ customer, categories, packages, initialMode, ini
     <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_300px]">
       <div className="min-w-0">
         <Stepper steps={STEPS} current={step} reachable={reachable} onSelect={setStep} />
+
+        {draftRestored ? (
+          <Notice tone="info" className="mt-4" live>
+            Your unfinished booking is still here. Nothing is reserved until you confirm.{" "}
+            <button
+              type="button"
+              onClick={startOver}
+              className="font-semibold underline underline-offset-2 hover:text-ink"
+            >
+              Start over
+            </button>
+          </Notice>
+        ) : null}
+
+        {mode || category ? (
+          <details className="group mt-4 rounded-lg border border-hairline bg-raised xl:hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-body-sm font-semibold">
+              <span className="inline-flex items-center gap-2">
+                <ClipboardList className="size-4 text-brand" aria-hidden /> Your session
+              </span>
+              <span className="inline-flex items-center gap-2 text-ink-muted">
+                {quote && startAt ? <span className="tabular">{formatINR(quote.totalAmount)}</span> : null}
+                <ChevronDown
+                  className="size-4 transition-transform duration-200 group-open:rotate-180"
+                  aria-hidden
+                />
+              </span>
+            </summary>
+            <div className="px-2 pb-2">
+              <SummaryPanel
+                bare
+                mode={mode}
+                category={category}
+                startAt={startAt}
+                trainerName={selectedTrainer?.name ?? null}
+                zoneName={customer.zoneName}
+                quoteTotal={quote ? formatINR(quote.totalAmount) : null}
+                quoteIsPeak={quote?.isPeak ?? false}
+                tz={tz}
+              />
+            </div>
+          </details>
+        ) : null}
 
         <section className="mt-8" aria-labelledby="step-heading">
           {step === "type" ? (
@@ -345,6 +475,11 @@ export function BookingWizard({ customer, categories, packages, initialMode, ini
                   );
                 })}
               </fieldset>
+              <p className="text-body-sm text-ink-muted">
+                Instant doesn&apos;t mean right this second: we allow {INSTANT_MIN_LEAD_MINUTES}–
+                {INSTANT_WINDOW_MINUTES} minutes for your trainer to reach you. Scheduled sessions start
+                more than an hour from now.
+              </p>
               <StepFooter>
                 <span />
                 <Button variant="primary" disabled={!mode || !hydrated} onClick={() => setStep("workout")}>
@@ -656,6 +791,11 @@ export function BookingWizard({ customer, categories, packages, initialMode, ini
                   />
                 </div>
 
+                <p className="rounded-md bg-sunken px-3.5 py-3 text-body-sm text-ink-muted">
+                  <span className="font-semibold text-ink">Cancellation: </span>
+                  {CANCELLATION_POLICY_NOTE}
+                </p>
+
                 {submitError ? (
                   <SubmitProblem
                     error={submitError}
@@ -698,29 +838,17 @@ export function BookingWizard({ customer, categories, packages, initialMode, ini
       </div>
 
       <aside className="hidden xl:block" aria-label="Booking summary">
-        <div className="sticky top-10 grid gap-4 rounded-lg border border-hairline bg-raised p-5">
-          <p className="text-eyebrow font-semibold tracking-[0.08em] text-ink-muted uppercase">
-            Your session
-          </p>
-          <dl className="grid gap-3 text-body-sm">
-            <SummaryRow label="Type" value={mode ? (mode === "INSTANT" ? "Instant" : "Scheduled") : null} />
-            <SummaryRow label="Workout" value={category ? categoryLabel(category) : null} />
-            <SummaryRow
-              label="When"
-              value={startAt ? `${formatSlot(new Date(startAt), tz)} · ${SESSION_MINUTES} min` : null}
-            />
-            <SummaryRow label="Trainer" value={selectedTrainer?.name ?? null} />
-          </dl>
-          <div className="flex items-center gap-2 border-t border-hairline pt-3 text-body-sm text-ink-muted">
-            <MapPin className="size-4 shrink-0" aria-hidden />
-            <span className="truncate">{customer.zoneName}</span>
-          </div>
-          {quote && startAt ? (
-            <div className="flex items-baseline justify-between border-t border-hairline pt-3">
-              <span className="text-body-sm text-ink-muted">{quote.isPeak ? "Peak total" : "Total"}</span>
-              <span className="text-heading-md font-semibold tabular">{formatINR(quote.totalAmount)}</span>
-            </div>
-          ) : null}
+        <div className="sticky top-10">
+          <SummaryPanel
+            mode={mode}
+            category={category}
+            startAt={startAt}
+            trainerName={selectedTrainer?.name ?? null}
+            zoneName={customer.zoneName}
+            quoteTotal={quote && startAt ? formatINR(quote.totalAmount) : null}
+            quoteIsPeak={quote?.isPeak ?? false}
+            tz={tz}
+          />
         </div>
       </aside>
     </div>
@@ -780,6 +908,58 @@ function SummaryRow({ label, value }: { label: string; value: string | null }) {
     <div className="grid grid-cols-[72px_1fr] gap-2">
       <dt className="text-ink-muted">{label}</dt>
       <dd className={value ? "font-semibold" : "text-ink-subtle"}>{value ?? "Not chosen yet"}</dd>
+    </div>
+  );
+}
+
+function SummaryPanel({
+  mode,
+  category,
+  startAt,
+  trainerName,
+  zoneName,
+  quoteTotal,
+  quoteIsPeak = false,
+  tz,
+  bare,
+}: {
+  mode: BookingMode | null;
+  category: WorkoutCategory | null;
+  startAt: string | null;
+  trainerName: string | null;
+  zoneName: string;
+  quoteTotal: string | null;
+  quoteIsPeak?: boolean;
+  tz: string;
+  bare?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "grid gap-4 rounded-lg border border-hairline bg-raised p-5",
+        bare && "rounded-none border-0 bg-transparent p-3",
+      )}
+    >
+      <p className="text-eyebrow font-semibold tracking-[0.08em] text-ink-muted uppercase">Your session</p>
+      <dl className="grid gap-3 text-body-sm">
+        <SummaryRow label="Type" value={mode ? (mode === "INSTANT" ? "Instant" : "Scheduled") : null} />
+        <SummaryRow label="Workout" value={category ? categoryLabel(category) : null} />
+        <SummaryRow
+          label="When"
+          value={startAt ? `${formatSlot(new Date(startAt), tz)} · ${SESSION_MINUTES} min` : null}
+        />
+        <SummaryRow label="Trainer" value={trainerName} />
+      </dl>
+      <div className="flex items-center gap-2 border-t border-hairline pt-3 text-body-sm text-ink-muted">
+        <MapPin className="size-4 shrink-0" aria-hidden />
+        <span className="truncate">{zoneName}</span>
+      </div>
+      {quoteTotal ? (
+        <div className="flex items-baseline justify-between border-t border-hairline pt-3">
+          <span className="text-body-sm text-ink-muted">{quoteIsPeak ? "Peak total" : "Total"}</span>
+          <span className="text-heading-md font-semibold tabular">{quoteTotal}</span>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -23,9 +23,14 @@ export function Stepper<S extends string>({
   const currentIndex = steps.findIndex((s) => s.id === current);
   return (
     <nav aria-label="Booking progress">
-      <p className="mb-2 text-body-sm text-ink-muted sm:hidden">
-        Step {currentIndex + 1} of {steps.length} ·{" "}
-        <span className="font-semibold text-ink">{steps[currentIndex]?.label}</span>
+      <p className="mb-2 flex items-center justify-between gap-3 text-body-sm text-ink-muted">
+        <span>
+          Step {currentIndex + 1} of {steps.length}
+          <span className="hidden sm:inline"> · </span>
+          <span className="hidden font-semibold text-ink sm:inline">{steps[currentIndex]?.label}</span>
+          <span className="font-semibold text-ink sm:hidden"> · {steps[currentIndex]?.label}</span>
+        </span>
+        <span className="tabular">{Math.round(((currentIndex + 1) / steps.length) * 100)}% complete</span>
       </p>
       <ol className="flex gap-1.5 sm:gap-2">
         {steps.map((s, i) => {
