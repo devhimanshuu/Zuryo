@@ -47,7 +47,7 @@ export function defaultFitnessDeps(): FitnessDeps {
 // ─── Dashboard reads ────────────────────────────────────────────────────
 
 export async function getFitnessDashboard(db: DbOrTx, customerId: string, now: Date, page = 1) {
-  const [profile, goals, recommendationPage, stats, sessions] = await Promise.all([
+  const [profile, goals, recommendationPage, stats, sessions, activity] = await Promise.all([
     db.customerProfile.findUnique({
       where: { userId: customerId },
       select: {
@@ -99,6 +99,15 @@ export async function getFitnessDashboard(db: DbOrTx, customerId: string, now: D
       take: 8,
       include: { booking: { include: { trainer: { include: { user: { select: { name: true } } } } } } },
     }),
+    db.booking.findMany({
+      where: {
+        customerId,
+        status: "COMPLETED",
+        endAt: { gte: new Date(now.getTime() - 12 * 7 * 86_400_000) },
+      },
+      orderBy: { endAt: "desc" },
+      select: { endAt: true },
+    }),
   ]);
   const [completedCount, completedLast30Days, upcomingCount, categoryRows] = stats;
   return {
@@ -113,6 +122,7 @@ export async function getFitnessDashboard(db: DbOrTx, customerId: string, now: D
       categories: categoryRows.map((r) => ({ category: r.workoutCategory as string, count: r._count._all })),
     },
     sessions,
+    activityDates: activity.map((a) => a.endAt),
   };
 }
 

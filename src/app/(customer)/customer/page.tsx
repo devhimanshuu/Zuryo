@@ -3,6 +3,7 @@ import {
   Bell,
   CalendarClock,
   ClipboardCheck,
+  Flame,
   MapPin,
   NotebookPen,
   Package,
@@ -26,10 +27,15 @@ import {
   CardLink,
   CardTitle,
 } from "@/components/ui/card";
-import { PackageMeter } from "@/features/customers/package-meter";
+import { ActivityStrip } from "@/features/customers/activity-strip";
+import { PackageRing } from "@/features/customers/package-ring";
+import { SessionCountdown } from "@/features/customers/session-countdown";
 import { TrainerArrival } from "@/features/location/trainer-arrival";
+import { OnboardingChecklist } from "@/features/onboarding/onboarding-checklist";
 import { LiveSessionStatus } from "@/features/sessions/live-session-status";
+import { activityByDay, currentStreak } from "@/lib/activity";
 import { categoryLabel } from "@/lib/booking/categories";
+import { localDateKey } from "@/lib/booking/time";
 import { coverageSummary } from "@/lib/payments/coverage";
 import { formatINR } from "@/lib/pricing";
 import { safely } from "@/lib/utils/errors";
@@ -48,13 +54,18 @@ export default async function CustomerHomePage() {
     return getCustomerHome(actor.userId);
   });
   if (!result.ok) return <ErrorState message={result.error.message} />;
-  const { profile, upcoming, recent, pkg, unread } = result.data;
+  const { profile, upcoming, recent, pkg, unread, activityDates, bookingCount, completedCount } = result.data;
   if (!profile)
     return <ErrorState title="Demo customer not found" message="Run npm run db:seed to create demo data." />;
 
   const firstName = profile.user.name.split(" ")[0];
   const next = upcoming[0];
   const nextTrip = next?.status === "CONFIRMED" ? next.trip : null;
+  const tz = profile.serviceZone.timezone || DEFAULT_TZ;
+  const serverNow = new Date();
+  const todayKey = localDateKey(serverNow, tz);
+  const activity = activityByDay(activityDates, todayKey, tz, 14);
+  const streak = currentStreak(activityDates, todayKey, tz);
 
   return (
     <div className="grid gap-8">
@@ -81,6 +92,42 @@ export default async function CustomerHomePage() {
         ) : null}
       </header>
 
+      <OnboardingChecklist
+        storageKey={`zuryo-onboarding:${actor.userId}`}
+        title={bookingCount === 0 ? `Welcome to Zuryo, ${firstName}` : "A few things left to set up"}
+        description="Four small steps so every session fits you from the start."
+        steps={[
+          {
+            id: "profile",
+            title: "Complete your fitness profile",
+            body: "Your level, goals and preferences guide trainer matching.",
+            href: "/customer/fitness",
+            done: Boolean(profile.assessedAt),
+          },
+          {
+            id: "goal",
+            title: "Pick a fitness goal",
+            body: "Choose what you're working towards so we can tailor sessions.",
+            href: "/customer/fitness",
+            done: profile.fitnessGoals.length > 0,
+          },
+          {
+            id: "book",
+            title: "Book your first session",
+            body: "Instant or scheduled, with a trainer from your community.",
+            href: "/customer/bookings/new",
+            done: bookingCount > 0,
+          },
+          {
+            id: "finish",
+            title: "Finish your first session",
+            body: "Complete one session to start your streak and get notes.",
+            href: "/customer/bookings?tab=completed",
+            done: completedCount > 0,
+          },
+        ]}
+      />
+
       <section aria-labelledby="next-heading" className="grid gap-4">
         {next ? (
           <article className="relative isolate overflow-hidden rounded-lg bg-inverse p-5 text-ink-inverse shadow-(--shadow-3) sm:p-7">
@@ -94,7 +141,7 @@ export default async function CustomerHomePage() {
                 <div className="min-w-0">
                   <h2
                     id="next-heading"
-                    className="text-eyebrow font-semibold tracking-[0.08em] text-ink-inverse/60 uppercase"
+                    className="text-eyebrow font-semibold tracking-[0.08em] text-ink-inverse/70 uppercase"
                   >
                     Your next session ·{" "}
                     {next.status === "IN_PROGRESS"
@@ -109,7 +156,16 @@ export default async function CustomerHomePage() {
                   </p>
                 </div>
               </div>
-              <StatusBadge status={next.status} rescheduled={next.rescheduleCount > 0} />
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {next.startAt > serverNow && next.status !== "IN_PROGRESS" ? (
+                  <SessionCountdown
+                    startAt={next.startAt.toISOString()}
+                    serverNow={serverNow.toISOString()}
+                    className="rounded-full border border-ink-inverse/15 bg-ink-inverse/[0.06] px-2.5 py-1 text-body-sm font-semibold text-ink-inverse/85"
+                  />
+                ) : null}
+                <StatusBadge status={next.status} rescheduled={next.rescheduleCount > 0} />
+              </div>
             </div>
             {next.status === "IN_PROGRESS" && next.sessionRecord && !next.sessionRecord.completedAt ? (
               <div className="mt-6">
@@ -196,7 +252,7 @@ export default async function CustomerHomePage() {
         </div>
       </section>
 
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader>
             <CardTitle>Package</CardTitle>
@@ -205,7 +261,15 @@ export default async function CustomerHomePage() {
           <CardContent>
             {pkg ? (
               <div className="grid gap-4">
-                <PackageMeter name={pkg.name} total={pkg.totalSessions} used={pkg.usedSessions} />
+                <div className="flex items-center gap-4">
+                  <PackageRing total={pkg.totalSessions} used={pkg.usedSessions} />
+                  <div className="min-w-0">
+                    <p className="font-semibold">{pkg.name}</p>
+                    <p className="mt-1 text-body-sm text-ink-muted tabular">
+                      {pkg.usedSessions} of {pkg.totalSessions} used
+                    </p>
+                  </div>
+                </div>
                 <CardLink href="/customer/packages">Usage history and packages</CardLink>
               </div>
             ) : (
@@ -283,6 +347,23 @@ export default async function CustomerHomePage() {
             ) : (
               <CardDescription>Completed sessions will appear here.</CardDescription>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Momentum</CardTitle>
+            <CardIcon icon={Flame} />
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            <p className="flex items-baseline gap-2">
+              <span className="font-display text-numeric-lg leading-none tabular">{streak}</span>
+              <span className="text-body-sm text-ink-muted">
+                {streak === 1 ? "day in a row" : "days in a row"}
+              </span>
+            </p>
+            <ActivityStrip days={activity} />
+            <p className="text-body-sm text-ink-subtle">Completed sessions over the last 14 days.</p>
           </CardContent>
         </Card>
       </div>

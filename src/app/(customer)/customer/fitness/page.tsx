@@ -2,13 +2,17 @@ import { Dumbbell, Sparkles, Target, TrendingUp, UserRound } from "lucide-react"
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
+import { AnimatedNumber } from "@/components/shared/animated-number";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState, ErrorState } from "@/components/shared/states";
 import { Card, CardContent, CardHeader, CardIcon, CardTitle } from "@/components/ui/card";
 import { FitnessProfileForm } from "@/features/fitness/profile-form";
 import { GenerateRecommendationButton } from "@/features/fitness/generate-button";
 import { RecommendationCard } from "@/features/fitness/recommendation-card";
+import { WeeklyActivity } from "@/features/fitness/weekly-activity";
+import { currentStreak, weeksOfActivity } from "@/lib/activity";
 import { categoryLabel } from "@/lib/booking/categories";
+import { localDateKey } from "@/lib/booking/time";
 import { recommendationOutputSchema } from "@/lib/fitness/recommendation-schema";
 import {
   EQUIPMENT_LABELS,
@@ -19,7 +23,7 @@ import {
 } from "@/lib/fitness/labels";
 import { parsePage } from "@/lib/pagination";
 import { safely } from "@/lib/utils/errors";
-import { formatDay, formatSlot, titleCase } from "@/lib/utils/format";
+import { DEFAULT_TZ, formatDay, formatSlot, titleCase } from "@/lib/utils/format";
 import { getDb } from "@/lib/db";
 import type { FitnessGoal, WorkoutCategory } from "@/lib/validation/enums";
 import { actualDurationMinutes, parseActivities, type SessionActivity } from "@/lib/validation/sessions";
@@ -41,7 +45,11 @@ export default async function FitnessPage({ searchParams }: { searchParams: Prom
   const page = parsePage(rawPage);
   const result = await safely(() => getFitnessDashboard(getDb(), actor.userId, new Date(), page));
   if (!result.ok) return <ErrorState message={result.error.message} />;
-  const { profile, goals, recommendations, recommendationPage, stats, sessions } = result.data;
+  const { profile, goals, recommendations, recommendationPage, stats, sessions, activityDates } = result.data;
+
+  const todayKey = localDateKey(new Date(), DEFAULT_TZ);
+  const weeks = weeksOfActivity(activityDates, todayKey, DEFAULT_TZ, 12);
+  const streak = currentStreak(activityDates, todayKey, DEFAULT_TZ);
 
   const activeGoals = (profile?.fitnessGoals ?? []) as FitnessGoal[];
   const goalDetail = new Map(goals.map((g) => [g.goal, g]));
@@ -119,7 +127,7 @@ export default async function FitnessPage({ searchParams }: { searchParams: Prom
                       ? profile.workoutPreferences.map((p) => PREFERENCE_LABELS[p]).join(", ")
                       : "None listed"}
                   </dd>
-                </dl>
+              </dl>
               ) : (
                 <p className="text-ink-muted">No profile yet.</p>
               )}
@@ -195,6 +203,16 @@ export default async function FitnessPage({ searchParams }: { searchParams: Prom
                   </dd>
                 </div>
               </dl>
+              <div className="rounded-md border border-hairline bg-surface px-3 py-2.5">
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="text-body-sm text-ink-muted">Current streak</p>
+                  <p className="font-display text-heading-lg leading-none tabular">
+                    <AnimatedNumber value={streak} /> day{streak === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <WeeklyActivity weeks={weeks} />
+                <p className="mt-1 text-body-sm text-ink-subtle">Sessions per week, last 12 weeks.</p>
+              </div>
               {stats.categories.length > 0 ? (
                 <ul className="grid gap-1.5">
                   {stats.categories.map((c) => (

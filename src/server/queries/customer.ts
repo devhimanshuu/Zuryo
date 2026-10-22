@@ -44,10 +44,14 @@ export const customerBookingInclude = {
 
 export async function getCustomerHome(userId: string, now = new Date()) {
   const db = getDb();
-  const [profile, upcoming, recent, pkg, unread] = await Promise.all([
+  const activityCutoff = new Date(now.getTime() - 8 * 7 * 86_400_000);
+  const [profile, upcoming, recent, pkg, unread, activity, bookingCount, completedCount] = await Promise.all([
     db.customerProfile.findUnique({
       where: { userId },
-      include: { user: { select: { name: true } }, serviceZone: { select: { name: true } } },
+      include: {
+        user: { select: { name: true } },
+        serviceZone: { select: { name: true, timezone: true } },
+      },
     }),
     db.booking
       .findMany({
@@ -69,8 +73,24 @@ export async function getCustomerHome(userId: string, now = new Date()) {
       orderBy: { purchasedAt: "desc" },
     }),
     db.notification.count({ where: { recipientId: userId, readAt: null } }),
+    db.booking.findMany({
+      where: { customerId: userId, status: "COMPLETED", endAt: { gte: activityCutoff } },
+      orderBy: { endAt: "desc" },
+      select: { endAt: true },
+    }),
+    db.booking.count({ where: { customerId: userId } }),
+    db.booking.count({ where: { customerId: userId, status: "COMPLETED" } }),
   ]);
-  return { profile, upcoming, recent, pkg, unread };
+  return {
+    profile,
+    upcoming,
+    recent,
+    pkg,
+    unread,
+    activityDates: activity.map((a) => a.endAt),
+    bookingCount,
+    completedCount,
+  };
 }
 
 export const CUSTOMER_BOOKING_TABS = ["upcoming", "completed", "cancelled", "other"] as const;
