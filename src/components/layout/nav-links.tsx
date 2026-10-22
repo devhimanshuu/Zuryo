@@ -33,9 +33,11 @@ export function NavLinks({
               href={href}
               onClick={onNavigate}
               aria-current={active ? "page" : undefined}
+              aria-label={variant === "sidebar" ? label : undefined}
+              title={variant === "sidebar" ? label : undefined}
               className={cn(
                 variant === "sidebar" &&
-                  "relative flex h-10 items-center gap-3 rounded-md px-3 text-sm font-semibold text-ink-muted transition-colors duration-150 hover:bg-sunken hover:text-ink",
+                  "relative flex h-10 items-center gap-3 rounded-md px-3 text-sm font-semibold text-ink-muted transition-colors duration-150 hover:bg-sunken hover:text-ink lg:group-data-[collapsed=true]/shell:justify-center lg:group-data-[collapsed=true]/shell:px-0",
                 variant === "sidebar" &&
                   active &&
                   "bg-brand-soft text-brand before:absolute before:inset-y-2 before:-left-3 before:w-1 before:rounded-r-full before:bg-brand hover:bg-brand-soft hover:text-brand",
@@ -57,8 +59,16 @@ export function NavLinks({
               ) : (
                 <Icon className="size-[18px] shrink-0" aria-hidden strokeWidth={active ? 2.25 : 1.75} />
               )}
-              {label}
-              {variant === "sidebar" && badge ? <span className="ml-auto">{badge}</span> : null}
+              {variant === "sidebar" ? (
+                <span className="lg:group-data-[collapsed=true]/shell:hidden">{label}</span>
+              ) : (
+                label
+              )}
+              {variant === "sidebar" && badge ? (
+                <span className="ml-auto lg:group-data-[collapsed=true]/shell:absolute lg:group-data-[collapsed=true]/shell:top-0.5 lg:group-data-[collapsed=true]/shell:right-1.5 lg:group-data-[collapsed=true]/shell:ml-0">
+                  {badge}
+                </span>
+              ) : null}
             </Link>
           </li>
         );

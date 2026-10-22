@@ -236,7 +236,7 @@ export function CommandTrigger({ variant = "sidebar" }: { variant?: "sidebar" | 
       onClick={() => window.dispatchEvent(new Event(OPEN_EVENT))}
       className={cn(
         variant === "sidebar"
-          ? "flex w-full items-center gap-2 rounded-md border border-hairline bg-surface px-3 py-2 text-left text-body-sm text-ink-muted transition-colors hover:border-control hover:text-ink"
+          ? "flex w-full items-center gap-2 rounded-md border border-hairline bg-surface px-3 py-2 text-left text-body-sm text-ink-muted transition-colors hover:border-control hover:text-ink lg:group-data-[collapsed=true]/shell:justify-center lg:group-data-[collapsed=true]/shell:px-0"
           : "grid size-10 place-items-center rounded-md text-ink-muted hover:bg-sunken hover:text-ink",
       )}
       aria-label="Search pages and actions (Ctrl K)"
@@ -244,8 +244,8 @@ export function CommandTrigger({ variant = "sidebar" }: { variant?: "sidebar" | 
       <Search className="size-4 shrink-0" aria-hidden />
       {variant === "sidebar" ? (
         <>
-          <span className="flex-1">Search</span>
-          <kbd className="rounded border border-hairline px-1.5 py-0.5 text-[10px] font-semibold">
+          <span className="flex-1 lg:group-data-[collapsed=true]/shell:hidden">Search</span>
+          <kbd className="rounded border border-hairline px-1.5 py-0.5 text-[10px] font-semibold lg:group-data-[collapsed=true]/shell:hidden">
             Ctrl K
           </kbd>
         </>

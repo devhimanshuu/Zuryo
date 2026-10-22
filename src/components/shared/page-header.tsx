@@ -27,7 +27,13 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <header className={cn("grid gap-3 pb-6", className)}>
+    <header
+      className={cn(
+        // Pinned under the mobile top bar (h-14); flush to the top on desktop.
+        "sticky top-14 z-20 -mx-4 grid gap-3 border-b border-transparent bg-surface/90 px-4 pt-2 pb-4 backdrop-blur-md sm:-mx-6 sm:px-6 lg:top-0 lg:-mx-8 lg:px-8 mb-2",
+        className,
+      )}
+    >
       {breadcrumbs && breadcrumbs.length > 0 ? (
         <nav aria-label="Breadcrumb">
           <ol className="flex flex-wrap items-center gap-1 text-sm font-semibold text-ink-muted">

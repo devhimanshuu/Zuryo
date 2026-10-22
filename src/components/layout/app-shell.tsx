@@ -10,7 +10,11 @@ import { LiveRefresh } from "./live-refresh";
 import { MobileNav } from "./mobile-nav";
 import { NAV } from "./nav-config";
 import { NavLinks, type NavBadges } from "./nav-links";
+import { ShellFrame, SidebarToggle } from "./shell-frame";
 import { ThemeControl } from "./theme-control";
+
+/** Hide-when-collapsed, desktop only (the phone drawer is always expanded). */
+const HIDE_COLLAPSED = "lg:group-data-[collapsed=true]/shell:hidden";
 
 /**
  * Shared workspace frame for all three roles: sidebar on desktop, top bar + drawer on smaller
@@ -31,7 +35,7 @@ export function AppShell({
 }) {
   const home = ROLE_HOME[role];
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[264px_1fr]">
+    <ShellFrame>
       <a
         href="#main"
         className="sr-only z-50 rounded-md bg-raised px-3 py-2 focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
@@ -77,7 +81,7 @@ export function AppShell({
           <NavLinks role={role} variant="tabs" badges={badges} />
         </nav>
       ) : null}
-    </div>
+    </ShellFrame>
   );
 }
 
@@ -107,15 +111,18 @@ function SidebarContent({
   const { cta } = NAV[role];
   return (
     <>
-      <div className="flex h-16 shrink-0 items-center gap-2.5 px-5">
-        <Wordmark href={ROLE_HOME[role]} />
-        <WorkspacePill role={role} />
+      <div className="flex h-16 shrink-0 items-center gap-2.5 px-5 lg:group-data-[collapsed=true]/shell:justify-center lg:group-data-[collapsed=true]/shell:px-0">
+        <span className={cn("flex items-center gap-2.5", HIDE_COLLAPSED)}>
+          <Wordmark href={ROLE_HOME[role]} />
+          <WorkspacePill role={role} />
+        </span>
+        <SidebarToggle className="lg:ml-auto lg:group-data-[collapsed=true]/shell:ml-0" />
       </div>
       {cta ? (
         <div className="px-3 pt-2">
-          <Button asChild variant="primary" className="w-full shadow-(--shadow-2)">
-            <Link href={cta.href}>
-              <cta.icon aria-hidden /> {cta.label}
+          <Button asChild variant="primary" className="w-full shadow-(--shadow-2)" title={cta.label}>
+            <Link href={cta.href} aria-label={cta.label}>
+              <cta.icon aria-hidden /> <span className={HIDE_COLLAPSED}>{cta.label}</span>
             </Link>
           </Button>
         </div>
@@ -125,7 +132,10 @@ function SidebarContent({
       </div>
       <nav aria-label="Workspace" className="min-h-0 flex-1 overflow-y-auto px-3 pt-5">
         <p
-          className="px-3 pb-2 text-[11px] font-semibold tracking-[0.08em] text-ink-subtle uppercase"
+          className={cn(
+            "px-3 pb-2 text-[11px] font-semibold tracking-[0.08em] text-ink-subtle uppercase",
+            HIDE_COLLAPSED,
+          )}
           aria-hidden
         >
           Menu
@@ -133,7 +143,12 @@ function SidebarContent({
         <NavLinks role={role} badges={badges} />
       </nav>
       <div className="shrink-0 p-3">
-        <AccountPanel role={role} name={accountName} />
+        <div className={HIDE_COLLAPSED}>
+          <AccountPanel role={role} name={accountName} />
+        </div>
+        <div className="hidden justify-center lg:group-data-[collapsed=true]/shell:flex" title={accountName}>
+          <Avatar name={accountName} />
+        </div>
       </div>
     </>
   );
