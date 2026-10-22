@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/shared/page-header";
+import { Pagination } from "@/components/shared/pagination";
 import { EmptyState, ErrorState } from "@/components/shared/states";
 import { PricingEditor } from "@/features/operations/pricing-editor";
 import { getDb } from "@/lib/db";
+import { parsePage } from "@/lib/pagination";
 import { calculatePriceBreakdown, formatINR } from "@/lib/pricing";
 import { safely } from "@/lib/utils/errors";
 import { formatDays, formatSlot, minutesToClock } from "@/lib/utils/format";
@@ -11,9 +13,11 @@ import { getPricingAdminView } from "@/server/booking/pricing-service";
 
 export const metadata: Metadata = { title: "Pricing rules" };
 
-export default async function PricingPage() {
+export default async function PricingPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const actor = await getActor("OPERATIONS");
-  const result = await safely(() => getPricingAdminView(getDb()));
+  const { page: rawPage } = await searchParams;
+  const page = parsePage(rawPage);
+  const result = await safely(() => getPricingAdminView(getDb(), page));
   if (!result.ok) return <ErrorState message={result.error.message} />;
   const { standard, peak, history } = result.data;
 
@@ -25,7 +29,10 @@ export default async function PricingPage() {
         className="pb-0"
       />
       {!standard ? (
-        <EmptyState title="No active standard rule" body="Run the seed to create the default normal and peak rules." />
+        <EmptyState
+          title="No active standard rule"
+          body="Run the seed to create the default normal and peak rules."
+        />
       ) : (
         <PricingEditor
           // Remount after a save so the form shows the new versions.
@@ -37,7 +44,14 @@ export default async function PricingPage() {
               commissionPercent: peak?.commissionPercent ?? standard.commissionPercent,
               windows: peak?.windows.length
                 ? peak.windows
-                : [{ label: "Weekday mornings", daysOfWeek: [1, 2, 3, 4, 5], startMinute: 360, endMinute: 540 }],
+                : [
+                    {
+                      label: "Weekday mornings",
+                      daysOfWeek: [1, 2, 3, 4, 5],
+                      startMinute: 360,
+                      endMinute: 540,
+                    },
+                  ],
             },
             basedOn: { standardRuleId: standard.id, peakRuleId: peak?.id ?? null },
           }}
@@ -49,24 +63,36 @@ export default async function PricingPage() {
           Version history
         </h2>
         <p className="text-body-sm text-ink-muted">
-          Every saved change is a new rule. Bookings point at the version that priced them, which is why the counts
-          below never move when prices change.
+          Every saved change is a new rule. Bookings point at the version that priced them, which is why the
+          counts below never move when prices change.
         </p>
         <div className="overflow-x-auto rounded-lg border border-hairline bg-raised shadow-(--shadow-1)">
           <table className="w-full min-w-[640px] text-left text-body-md">
             <caption className="sr-only">Pricing rule versions</caption>
             <thead className="border-b border-hairline bg-sunken/60 text-eyebrow font-semibold tracking-[0.08em] text-ink-muted uppercase">
               <tr>
-                <th scope="col" className="px-4 py-3">Rule</th>
-                <th scope="col" className="px-4 py-3">Effective from</th>
-                <th scope="col" className="px-4 py-3 text-right">Session</th>
-                <th scope="col" className="px-4 py-3 text-right">Customer pays</th>
-                <th scope="col" className="px-4 py-3">Windows</th>
-                <th scope="col" className="px-4 py-3 text-right">Bookings priced</th>
+                <th scope="col" className="px-4 py-3">
+                  Rule
+                </th>
+                <th scope="col" className="px-4 py-3">
+                  Effective from
+                </th>
+                <th scope="col" className="px-4 py-3 text-right">
+                  Session
+                </th>
+                <th scope="col" className="px-4 py-3 text-right">
+                  Customer pays
+                </th>
+                <th scope="col" className="px-4 py-3">
+                  Windows
+                </th>
+                <th scope="col" className="px-4 py-3 text-right">
+                  Bookings priced
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-hairline">
-              {history.map((r) => {
+              {history.rows.map((r) => {
                 const b = calculatePriceBreakdown(r);
                 return (
                   <tr key={r.id} className={r.isActive ? "" : "text-ink-muted"}>
@@ -79,19 +105,24 @@ export default async function PricingPage() {
                       ) : (
                         <span className="ml-1 text-xs">Retired</span>
                       )}
-                      <span className="block text-body-sm text-ink-subtle">{r.createdBy ? `by ${r.createdBy}` : "seeded"}</span>
+                      <span className="block text-body-sm text-ink-subtle">
+                        {r.createdBy ? `by ${r.createdBy}` : "seeded"}
+                      </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">{formatSlot(r.effectiveFrom)}</td>
                     <td className="px-4 py-3 text-right tabular">
                       {formatINR(b.sessionPrice)}
-                      <span className="block text-body-sm text-ink-subtle">+{Number(b.commissionPercent)}%</span>
+                      <span className="block text-body-sm text-ink-subtle">
+                        +{Number(b.commissionPercent)}%
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-right font-semibold tabular">{formatINR(b.totalAmount)}</td>
                     <td className="px-4 py-3 text-body-sm">
                       {r.windows.length
                         ? r.windows.map((w) => (
                             <span key={w.label} className="block">
-                              {w.label}: {formatDays(w.daysOfWeek)} {minutesToClock(w.startMinute)}–{minutesToClock(w.endMinute)}
+                              {w.label}: {formatDays(w.daysOfWeek)} {minutesToClock(w.startMinute)}–
+                              {minutesToClock(w.endMinute)}
                             </span>
                           ))
                         : "—"}
@@ -103,6 +134,7 @@ export default async function PricingPage() {
             </tbody>
           </table>
         </div>
+        <Pagination pathname="/operations/pricing" result={history} itemLabel="versions" />
       </section>
     </div>
   );

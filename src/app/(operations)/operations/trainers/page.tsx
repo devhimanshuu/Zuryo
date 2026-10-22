@@ -1,23 +1,35 @@
 import { MapPin } from "lucide-react";
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/shared/page-header";
+import { Pagination } from "@/components/shared/pagination";
 import { Avatar } from "@/components/shared/avatar";
 import { ErrorState } from "@/components/shared/states";
 import { describeTravel, estimateTravel, toLatLng } from "@/lib/location/travel";
+import { parsePage } from "@/lib/pagination";
 import { safely } from "@/lib/utils/errors";
 import { getOperationsTrainers } from "@/server/queries/operations";
 
 export const metadata: Metadata = { title: "Trainers" };
 
-export default async function OperationsTrainersPage() {
-  const result = await safely(() => getOperationsTrainers());
+export default async function OperationsTrainersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { page: rawPage } = await searchParams;
+  const page = parsePage(rawPage);
+  const result = await safely(() => getOperationsTrainers(page));
   if (!result.ok) return <ErrorState message={result.error.message} />;
+  const trainers = result.data;
 
   return (
     <div>
-      <PageHeader title="Trainers" description="Everyone who can be assigned to sessions." />
+      <PageHeader
+        title="Trainers"
+        description={`${trainers.total} trainers who can be assigned to sessions.`}
+      />
       <ul className="grid gap-3 md:grid-cols-2">
-        {result.data.map((t) => {
+        {trainers.rows.map((t) => {
           const base = toLatLng(t.baseLatitude, t.baseLongitude);
           const zone = toLatLng(t.serviceZone.latitude, t.serviceZone.longitude);
           const travel = base && zone ? estimateTravel(base, zone) : null;
@@ -77,6 +89,7 @@ export default async function OperationsTrainersPage() {
           );
         })}
       </ul>
+      <Pagination pathname="/operations/trainers" result={trainers} itemLabel="trainers" />
     </div>
   );
 }

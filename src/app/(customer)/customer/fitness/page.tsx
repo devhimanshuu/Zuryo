@@ -2,6 +2,7 @@ import { Dumbbell, Sparkles, Target, TrendingUp, UserRound } from "lucide-react"
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
+import { Pagination } from "@/components/shared/pagination";
 import { EmptyState, ErrorState } from "@/components/shared/states";
 import { Card, CardContent, CardHeader, CardIcon, CardTitle } from "@/components/ui/card";
 import { FitnessProfileForm } from "@/features/fitness/profile-form";
@@ -16,6 +17,7 @@ import {
   INTENSITY_LABELS,
   PREFERENCE_LABELS,
 } from "@/lib/fitness/labels";
+import { parsePage } from "@/lib/pagination";
 import { safely } from "@/lib/utils/errors";
 import { formatDay, formatSlot, titleCase } from "@/lib/utils/format";
 import { getDb } from "@/lib/db";
@@ -33,11 +35,13 @@ function describe(a: SessionActivity) {
   return parts.filter(Boolean).join(" · ");
 }
 
-export default async function FitnessPage() {
+export default async function FitnessPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const actor = await getActor("CUSTOMER");
-  const result = await safely(() => getFitnessDashboard(getDb(), actor.userId, new Date()));
+  const { page: rawPage } = await searchParams;
+  const page = parsePage(rawPage);
+  const result = await safely(() => getFitnessDashboard(getDb(), actor.userId, new Date(), page));
   if (!result.ok) return <ErrorState message={result.error.message} />;
-  const { profile, goals, recommendations, stats, sessions } = result.data;
+  const { profile, goals, recommendations, recommendationPage, stats, sessions } = result.data;
 
   const activeGoals = (profile?.fitnessGoals ?? []) as FitnessGoal[];
   const goalDetail = new Map(goals.map((g) => [g.goal, g]));
@@ -88,9 +92,13 @@ export default async function FitnessPage() {
                   <dt className="text-ink-muted">Age</dt>
                   <dd className="font-semibold">{profile.age ?? "Not set"}</dd>
                   <dt className="text-ink-muted">Weight</dt>
-                  <dd className="font-semibold">{profile.weightKg ? `${profile.weightKg.toString()} kg` : "Not set"}</dd>
+                  <dd className="font-semibold">
+                    {profile.weightKg ? `${profile.weightKg.toString()} kg` : "Not set"}
+                  </dd>
                   <dt className="text-ink-muted">Level</dt>
-                  <dd className="font-semibold">{profile.fitnessLevel ? titleCase(profile.fitnessLevel) : "Not set"}</dd>
+                  <dd className="font-semibold">
+                    {profile.fitnessLevel ? titleCase(profile.fitnessLevel) : "Not set"}
+                  </dd>
                   <dt className="text-ink-muted">Intensity</dt>
                   <dd className="font-semibold">
                     {profile.intensity ? INTENSITY_LABELS[profile.intensity] : "Not set"}
@@ -101,7 +109,9 @@ export default async function FitnessPage() {
                   </dd>
                   <dt className="text-ink-muted">Equipment</dt>
                   <dd className="font-semibold">
-                    {profile.equipment.length ? profile.equipment.map((e) => EQUIPMENT_LABELS[e]).join(", ") : "None listed"}
+                    {profile.equipment.length
+                      ? profile.equipment.map((e) => EQUIPMENT_LABELS[e]).join(", ")
+                      : "None listed"}
                   </dd>
                   <dt className="text-ink-muted">Prefers</dt>
                   <dd className="font-semibold">
@@ -148,7 +158,9 @@ export default async function FitnessPage() {
                             {detail?.status === "COMPLETED" ? "Completed" : "Active"}
                           </span>
                         </div>
-                        {detail?.target ? <p className="text-body-sm text-ink-muted">Target: {detail.target}</p> : null}
+                        {detail?.target ? (
+                          <p className="text-body-sm text-ink-muted">Target: {detail.target}</p>
+                        ) : null}
                         {detail?.targetDate ? (
                           <p className="text-body-sm text-ink-muted">By {formatDay(detail.targetDate)}</p>
                         ) : null}
@@ -172,11 +184,15 @@ export default async function FitnessPage() {
               <dl className="grid grid-cols-2 gap-3">
                 <div className="rounded-md border border-hairline bg-surface px-3 py-2.5">
                   <dt className="text-body-sm text-ink-muted">Completed</dt>
-                  <dd className="font-display text-display-md leading-tight tabular">{stats.completedCount}</dd>
+                  <dd className="font-display text-display-md leading-tight tabular">
+                    {stats.completedCount}
+                  </dd>
                 </div>
                 <div className="rounded-md border border-hairline bg-surface px-3 py-2.5">
                   <dt className="text-body-sm text-ink-muted">Last 30 days</dt>
-                  <dd className="font-display text-display-md leading-tight tabular">{stats.completedLast30Days}</dd>
+                  <dd className="font-display text-display-md leading-tight tabular">
+                    {stats.completedLast30Days}
+                  </dd>
                 </div>
               </dl>
               {stats.categories.length > 0 ? (
@@ -197,7 +213,9 @@ export default async function FitnessPage() {
                   ))}
                 </ul>
               ) : (
-                <p className="text-body-sm text-ink-muted">No completed sessions yet — your category mix appears here.</p>
+                <p className="text-body-sm text-ink-muted">
+                  No completed sessions yet — your category mix appears here.
+                </p>
               )}
               <p className="text-body-sm text-ink-subtle">
                 {stats.upcomingCount} upcoming session{stats.upcomingCount === 1 ? "" : "s"}.
@@ -237,6 +255,7 @@ export default async function FitnessPage() {
                 ))}
               </ul>
             )}
+            <Pagination pathname="/customer/fitness" result={recommendationPage} itemLabel="workouts" />
           </section>
 
           <section aria-labelledby="profile-edit-h" className="grid gap-4">
@@ -299,7 +318,10 @@ export default async function FitnessPage() {
                       </p>
                       <ul className="mt-2 flex flex-wrap gap-2">
                         {activities.map((a, i) => (
-                          <li key={i} className="rounded-full border border-hairline bg-raised px-3 py-1 text-body-sm">
+                          <li
+                            key={i}
+                            className="rounded-full border border-hairline bg-raised px-3 py-1 text-body-sm"
+                          >
                             <span className="font-semibold">{a.name}</span>
                             {describe(a) ? <span className="text-ink-muted"> · {describe(a)}</span> : null}
                           </li>

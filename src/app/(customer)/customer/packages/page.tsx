@@ -2,6 +2,7 @@ import { ArrowRight, CalendarPlus, FlaskConical, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
+import { Pagination } from "@/components/shared/pagination";
 import { EmptyState, ErrorState, Notice } from "@/components/shared/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +10,7 @@ import { PackageMeter } from "@/features/customers/package-meter";
 import { ChoosePlanButton } from "@/features/packages/choose-plan-button";
 import { PackageStatusBadge } from "@/features/packages/package-status-badge";
 import { getDb } from "@/lib/db";
+import { parsePage } from "@/lib/pagination";
 import { cn } from "@/lib/utils/cn";
 import { formatINR } from "@/lib/pricing";
 import { safely } from "@/lib/utils/errors";
@@ -18,18 +20,31 @@ import { getCustomerPackages, listPlans } from "@/server/packages/package-servic
 
 export const metadata: Metadata = { title: "Packages" };
 
-export default async function PackagesPage({ searchParams }: { searchParams: Promise<{ purchased?: string }> }) {
+export default async function PackagesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ purchased?: string; page?: string }>;
+}) {
   const actor = await getActor("CUSTOMER");
   const now = new Date();
+  const { purchased, page: rawPage } = await searchParams;
+  const page = parsePage(rawPage);
   const result = await safely(async () => {
     const db = getDb();
-    const [owned, catalogue] = await Promise.all([getCustomerPackages(db, actor.userId, now), listPlans(db, now)]);
+    const [owned, catalogue] = await Promise.all([
+      getCustomerPackages(db, actor.userId, now, page),
+      listPlans(db, now),
+    ]);
     return { owned, catalogue };
   });
   if (!result.ok) return <ErrorState message={result.error.message} />;
   const { owned, catalogue } = result.data;
-  const { purchased } = await searchParams;
-  const justBought = purchased ? owned.find((p) => p.id === purchased && p.status !== "PENDING_PAYMENT") : null;
+  // Fetched independently of the page so the receipt shows on whatever page it lands on.
+  const justBought = purchased
+    ? await getDb().package.findFirst({
+        where: { id: purchased, customerId: actor.userId, status: { not: "PENDING_PAYMENT" } },
+      })
+    : null;
   // "Best value" is the lowest price per session among plans that actually save money; no claim otherwise.
   const bestValueId =
     catalogue.plans.length > 1
@@ -50,8 +65,8 @@ export default async function PackagesPage({ searchParams }: { searchParams: Pro
       {justBought ? (
         <Notice tone="success" title={`${justBought.name} is ready`} live>
           {justBought.totalSessions} session{justBought.totalSessions === 1 ? "" : "s"} added
-          {justBought.expiresAt ? `, valid until ${formatDay(justBought.expiresAt)}` : ""}. Choose it when you book a
-          session.
+          {justBought.expiresAt ? `, valid until ${formatDay(justBought.expiresAt)}` : ""}. Choose it when you
+          book a session.
         </Notice>
       ) : null}
 
@@ -59,14 +74,14 @@ export default async function PackagesPage({ searchParams }: { searchParams: Pro
         <h2 id="owned-h" className="text-heading-md font-semibold">
           Your packages
         </h2>
-        {owned.length === 0 ? (
+        {owned.rows.length === 0 ? (
           <EmptyState
             title="No packages yet"
             body="Buy a package below and use one session each time you book. You can still pay per session."
           />
         ) : (
           <div className="grid gap-4 lg:grid-cols-2">
-            {owned.map((p) => (
+            {owned.rows.map((p) => (
               <Card key={p.id}>
                 <CardHeader>
                   <div className="min-w-0">
@@ -90,7 +105,11 @@ export default async function PackagesPage({ searchParams }: { searchParams: Pro
                       </Button>
                     </div>
                   ) : (
-                    <PackageMeter name={`${p.remaining} of ${p.totalSessions} left`} total={p.totalSessions} used={p.usedSessions} />
+                    <PackageMeter
+                      name={`${p.remaining} of ${p.totalSessions} left`}
+                      total={p.totalSessions}
+                      used={p.usedSessions}
+                    />
                   )}
                   <p className="text-body-sm text-ink-muted">
                     {p.status === "PENDING_PAYMENT" ? "Price " : "Paid "}
@@ -102,7 +121,9 @@ export default async function PackagesPage({ searchParams }: { searchParams: Pro
                   </p>
                   {p.entries.length > 0 ? (
                     <details className="rounded-md bg-sunken px-3 py-2 text-body-sm">
-                      <summary className="cursor-pointer font-semibold">Usage history ({p.entries.length})</summary>
+                      <summary className="cursor-pointer font-semibold">
+                        Usage history ({p.entries.length})
+                      </summary>
                       <ol className="mt-2 grid gap-1.5">
                         {p.entries.map((e) => (
                           <li key={e.id} className="flex flex-wrap justify-between gap-x-3">
@@ -113,11 +134,16 @@ export default async function PackagesPage({ searchParams }: { searchParams: Pro
                                   ? "Returned from "
                                   : "Adjustment "}
                               {e.booking ? (
-                                <Link href={`/customer/bookings/${e.booking.id}`} className="font-semibold hover:underline">
+                                <Link
+                                  href={`/customer/bookings/${e.booking.id}`}
+                                  className="font-semibold hover:underline"
+                                >
                                   {e.booking.reference}
                                 </Link>
                               ) : null}
-                              {e.booking ? <span className="text-ink-muted"> · {formatSlot(e.booking.startAt)}</span> : null}
+                              {e.booking ? (
+                                <span className="text-ink-muted"> · {formatSlot(e.booking.startAt)}</span>
+                              ) : null}
                             </span>
                             <span className="text-ink-muted tabular">
                               {e.delta > 0 ? "+" : "−"}
@@ -133,6 +159,12 @@ export default async function PackagesPage({ searchParams }: { searchParams: Pro
             ))}
           </div>
         )}
+        <Pagination
+          pathname="/customer/packages"
+          searchParams={{ purchased }}
+          result={owned}
+          itemLabel="packages"
+        />
       </section>
 
       <section aria-labelledby="buy-h" className="grid gap-4">
@@ -171,12 +203,15 @@ export default async function PackagesPage({ searchParams }: { searchParams: Pro
                     <div>
                       <CardTitle>{plan.name}</CardTitle>
                       <p className="text-body-sm text-ink-muted">
-                        {plan.sessionCount} session{plan.sessionCount === 1 ? "" : "s"} · valid {plan.validityDays} days
+                        {plan.sessionCount} session{plan.sessionCount === 1 ? "" : "s"} · valid{" "}
+                        {plan.validityDays} days
                       </p>
                     </div>
                   </CardHeader>
                   <CardContent className="grid flex-1 content-start gap-3">
-                    {plan.description ? <p className="text-body-sm text-ink-muted">{plan.description}</p> : null}
+                    {plan.description ? (
+                      <p className="text-body-sm text-ink-muted">{plan.description}</p>
+                    ) : null}
                     <p className="flex items-baseline gap-2">
                       <span className="text-numeric-lg font-semibold tracking-tight tabular">
                         {formatINR(plan.quote.totalAmount)}
@@ -186,15 +221,17 @@ export default async function PackagesPage({ searchParams }: { searchParams: Pro
                     <dl className="grid grid-cols-[1fr_auto] gap-y-1 text-body-sm">
                       <dt className="text-ink-muted">Package price</dt>
                       <dd className="text-right tabular">{formatINR(plan.quote.basePrice)}</dd>
-                      <dt className="text-ink-muted">Society commission ({Number(plan.quote.commissionPercent)}%)</dt>
+                      <dt className="text-ink-muted">
+                        Society commission ({Number(plan.quote.commissionPercent)}%)
+                      </dt>
                       <dd className="text-right tabular">{formatINR(plan.quote.commissionAmount)}</dd>
                       <dt className="text-ink-muted">Per session (before commission)</dt>
                       <dd className="text-right tabular">{formatINR(plan.quote.perSessionBase)}</dd>
                     </dl>
                     {plan.quote.savings ? (
                       <p className="rounded-sm bg-success-soft px-2 py-1 text-body-sm text-success">
-                        {formatINR(plan.quote.savings)} less than {plan.sessionCount} standard sessions at today&apos;s{" "}
-                        {formatINR(catalogue.standardSessionPrice)} rate
+                        {formatINR(plan.quote.savings)} less than {plan.sessionCount} standard sessions at
+                        today&apos;s {formatINR(catalogue.standardSessionPrice)} rate
                       </p>
                     ) : null}
                   </CardContent>

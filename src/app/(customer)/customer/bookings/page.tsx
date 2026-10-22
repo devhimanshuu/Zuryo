@@ -2,68 +2,88 @@ import { CalendarPlus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
+import { Pagination } from "@/components/shared/pagination";
 import { ErrorState, EmptyState } from "@/components/shared/states";
 import { Button } from "@/components/ui/button";
 import { BookingItem } from "@/features/bookings/booking-item";
 import { CancelBookingButton } from "@/features/bookings/cancel-booking-button";
 import { cancellationBlocker } from "@/lib/booking/cancellation";
+import { parseChoice, parsePage } from "@/lib/pagination";
 import { coverageSummary } from "@/lib/payments/coverage";
+import { cn } from "@/lib/utils/cn";
 import { safely } from "@/lib/utils/errors";
 import { formatSlot } from "@/lib/utils/format";
 import { getActor } from "@/server/auth/actor";
 import { defaultDeps } from "@/server/booking/deps";
-import { getCustomerBookings } from "@/server/queries/customer";
+import {
+  CUSTOMER_BOOKING_TABS,
+  getCustomerBookings,
+  type CustomerBookingTab,
+} from "@/server/queries/customer";
 import { reconcileDueSessions } from "@/server/sessions/session-service";
 
 export const metadata: Metadata = { title: "My bookings" };
 
-export default async function CustomerBookingsPage() {
+const TAB_INFO: Record<CustomerBookingTab, { label: string; empty: string; hint?: string }> = {
+  upcoming: {
+    label: "Upcoming",
+    empty: "No upcoming sessions",
+    hint: "Book a trainer and your next session shows up here.",
+  },
+  completed: { label: "Completed", empty: "No completed sessions yet" },
+  cancelled: { label: "Cancelled", empty: "Nothing cancelled" },
+  other: {
+    label: "Didn't go ahead",
+    empty: "Nothing here",
+    hint: "Declined payments and scheduled sessions that passed without starting appear here.",
+  },
+};
+
+export default async function CustomerBookingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; page?: string }>;
+}) {
   const actor = await getActor("CUSTOMER");
+  const { status, page: rawPage } = await searchParams;
+  const tab = parseChoice(status, CUSTOMER_BOOKING_TABS, "upcoming");
+  const page = parsePage(rawPage);
   const result = await safely(async () => {
     // Bring any of this customer's sessions that hit their warning or deadline up to date first.
     await reconcileDueSessions(defaultDeps(), { customerId: actor.userId });
-    return getCustomerBookings(actor.userId);
+    return getCustomerBookings(actor.userId, tab, page);
   });
   if (!result.ok) return <ErrorState message={result.error.message} />;
 
   const now = new Date();
-  const rows = result.data;
-  const inProgress = rows.filter((b) => b.status === "IN_PROGRESS");
-  const upcoming = rows
-    .filter((b) => (b.status === "CONFIRMED" || b.status === "PENDING") && b.endAt >= now)
-    .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
-  const completed = rows.filter((b) => b.status === "COMPLETED");
-  const cancelled = rows.filter((b) => b.status === "CANCELLED");
-  // Didn't go ahead: declined payments, and confirmed sessions whose time passed without a start.
-  const other = rows.filter(
-    (b) => b.status === "FAILED" || ((b.status === "CONFIRMED" || b.status === "PENDING") && b.endAt < now),
-  );
+  const data = result.data;
+  const info = TAB_INFO[tab];
+  const search = tab === "upcoming" ? {} : { status: tab };
 
-  const groups = [
-    ...(inProgress.length
-      ? [{ id: "live", title: "In progress", items: inProgress, empty: "", hint: undefined }]
-      : []),
-    {
-      id: "upcoming",
-      title: "Upcoming",
-      items: upcoming,
-      empty: "No upcoming sessions",
-      hint: "Book a trainer and your next session shows up here.",
-    },
-    { id: "completed", title: "Completed", items: completed, empty: "No completed sessions yet", hint: undefined },
-    { id: "cancelled", title: "Cancelled", items: cancelled, empty: "Nothing cancelled", hint: undefined },
-    ...(other.length
-      ? [
-          {
-            id: "other",
-            title: "Didn't go ahead",
-            items: other,
-            empty: "",
-            hint: undefined,
-          },
-        ]
-      : []),
-  ];
+  const renderBooking = (b: (typeof data.rows)[number]) => (
+    <BookingItem
+      key={b.id}
+      b={{
+        ...b,
+        counterpartLabel: "Trainer",
+        counterpartName: b.trainer?.user.name ?? null,
+        location: b.serviceZone.name,
+        href: `/customer/bookings/${b.id}`,
+        coverage: coverageSummary(b),
+        session: b.sessionRecord,
+      }}
+      actions={
+        cancellationBlocker(b, now) ? null : (
+          <CancelBookingButton
+            as="CUSTOMER"
+            bookingId={b.id}
+            reference={b.reference}
+            whenLabel={`${formatSlot(b.startAt)}${b.trainer ? ` with ${b.trainer.user.name}` : ""}`}
+          />
+        )
+      }
+    />
+  );
 
   return (
     <div>
@@ -80,72 +100,72 @@ export default async function CustomerBookingsPage() {
         }
       />
       <nav aria-label="Booking groups" className="-mx-1 mb-8 flex gap-2 overflow-x-auto px-1 pb-1">
-        {groups.map((g) => (
-          <a
-            key={g.id}
-            href={`#${g.id}`}
-            className="inline-flex items-center gap-2 rounded-full border border-hairline bg-raised py-1.5 pr-1.5 pl-3.5 text-sm font-semibold whitespace-nowrap shadow-(--shadow-1) transition-colors hover:border-control/40 hover:bg-surface"
-          >
-            {g.title}
-            <span
-              className={
-                g.id === "live"
-                  ? "grid h-6 min-w-6 place-items-center rounded-full bg-accent-soft px-1.5 text-xs text-accent-text tabular"
-                  : "grid h-6 min-w-6 place-items-center rounded-full bg-sunken px-1.5 text-xs text-ink-muted tabular"
-              }
+        {CUSTOMER_BOOKING_TABS.map((id) => {
+          const active = id === tab;
+          return (
+            <Link
+              key={id}
+              href={id === "upcoming" ? "/customer/bookings" : `/customer/bookings?status=${id}`}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-full border py-1.5 pr-1.5 pl-3.5 text-sm font-semibold whitespace-nowrap shadow-(--shadow-1) transition-colors",
+                active
+                  ? "border-brand/50 bg-brand-soft text-brand-strong"
+                  : "border-hairline bg-raised hover:border-control/40 hover:bg-surface",
+              )}
             >
-              {g.items.length}
-            </span>
-          </a>
-        ))}
+              {TAB_INFO[id].label}
+              <span
+                className={cn(
+                  "grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-xs tabular",
+                  active ? "bg-canvas text-brand-strong" : "bg-sunken text-ink-muted",
+                )}
+              >
+                {data.counts[id]}
+              </span>
+            </Link>
+          );
+        })}
       </nav>
+
       <div className="grid gap-10">
-        {groups.map((g) => (
-          <section key={g.id} id={g.id} aria-labelledby={`${g.id}-h`} className="grid scroll-mt-20 gap-3">
-            <h2 id={`${g.id}-h`} className="flex items-center gap-2 text-heading-md font-semibold">
-              {g.title}
-              <span className="text-body-md font-normal text-ink-subtle tabular">{g.items.length}</span>
+        {data.live.length > 0 ? (
+          <section aria-labelledby="live-h" className="grid gap-3">
+            <h2 id="live-h" className="flex items-center gap-2 text-heading-md font-semibold">
+              In progress{" "}
+              <span className="text-body-md font-normal text-ink-subtle tabular">{data.live.length}</span>
             </h2>
-            {g.items.length > 0 ? (
-              g.items.map((b) => (
-                <BookingItem
-                  key={b.id}
-                  b={{
-                    ...b,
-                    counterpartLabel: "Trainer",
-                    counterpartName: b.trainer?.user.name ?? null,
-                    location: b.serviceZone.name,
-                    href: `/customer/bookings/${b.id}`,
-                    coverage: coverageSummary(b),
-                    session: b.sessionRecord,
-                  }}
-                  actions={
-                    cancellationBlocker(b, now) ? null : (
-                      <CancelBookingButton
-                        as="CUSTOMER"
-                        bookingId={b.id}
-                        reference={b.reference}
-                        whenLabel={`${formatSlot(b.startAt)}${b.trainer ? ` with ${b.trainer.user.name}` : ""}`}
-                      />
-                    )
-                  }
-                />
-              ))
-            ) : (
-              <EmptyState
-                title={g.empty}
-                body={g.hint}
-                action={
-                  g.id === "upcoming" ? (
-                    <Button asChild variant="primary" size="sm">
-                      <Link href="/customer/bookings/new">Book a session</Link>
-                    </Button>
-                  ) : undefined
-                }
-              />
-            )}
+            {data.live.map(renderBooking)}
           </section>
-        ))}
+        ) : null}
+
+        <section aria-labelledby="list-h" className="grid gap-3">
+          <h2 id="list-h" className="flex items-center gap-2 text-heading-md font-semibold">
+            {info.label}{" "}
+            <span className="text-body-md font-normal text-ink-subtle tabular">{data.total}</span>
+          </h2>
+          {data.rows.length > 0 ? (
+            data.rows.map(renderBooking)
+          ) : (
+            <EmptyState
+              title={info.empty}
+              body={info.hint}
+              action={
+                tab === "upcoming" ? (
+                  <Button asChild variant="primary" size="sm">
+                    <Link href="/customer/bookings/new">Book a session</Link>
+                  </Button>
+                ) : undefined
+              }
+            />
+          )}
+          <Pagination
+            pathname="/customer/bookings"
+            searchParams={search}
+            result={data}
+            itemLabel="bookings"
+          />
+        </section>
       </div>
     </div>
   );

@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/shared/page-header";
+import { Pagination } from "@/components/shared/pagination";
 import { ErrorState, PhaseNote } from "@/components/shared/states";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { parsePage } from "@/lib/pagination";
 import { coverageSummary } from "@/lib/payments/coverage";
 import { formatINR } from "@/lib/pricing";
 import { safely } from "@/lib/utils/errors";
@@ -10,14 +12,21 @@ import { getOperationsBookings } from "@/server/queries/operations";
 
 export const metadata: Metadata = { title: "Bookings" };
 
-export default async function OperationsBookingsPage() {
-  const result = await safely(getOperationsBookings);
+export default async function OperationsBookingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { page: rawPage } = await searchParams;
+  const page = parsePage(rawPage);
+  const result = await safely(() => getOperationsBookings(page));
   if (!result.ok) return <ErrorState message={result.error.message} />;
-  const rows = result.data;
+  const bookings = result.data;
+  const rows = bookings.rows;
 
   return (
     <div>
-      <PageHeader title="Bookings" description={`${rows.length} bookings, newest start time first.`} />
+      <PageHeader title="Bookings" description={`${bookings.total} bookings, newest start time first.`} />
 
       {/* Desktop: table. Under 768px the same data renders as stacked cards. */}
       <div className="hidden overflow-hidden rounded-lg border border-hairline bg-raised shadow-(--shadow-1) md:block">
@@ -103,6 +112,8 @@ export default async function OperationsBookingsPage() {
           </li>
         ))}
       </ul>
+
+      <Pagination pathname="/operations/bookings" result={bookings} itemLabel="bookings" />
 
       <div className="mt-6">
         <PhaseNote>Filters, a booking detail drawer and manual reassignment.</PhaseNote>

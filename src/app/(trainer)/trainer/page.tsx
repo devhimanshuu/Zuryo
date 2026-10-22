@@ -26,7 +26,7 @@ export default async function TrainerOverviewPage() {
     return getTrainerOverview(actor.userId, dayStart, addDays(dayStart, 1));
   });
   if (!result.ok) return <ErrorState message={result.error.message} />;
-  const { profile, today, upcoming, notifications } = result.data;
+  const { profile, today, upcoming, upcomingCount, notifications } = result.data;
   const next = [...today, ...upcoming].find((b) => b.endAt > now && b.status !== "COMPLETED");
   const live = today.find((b) => b.status === "IN_PROGRESS");
 
@@ -46,7 +46,10 @@ export default async function TrainerOverviewPage() {
           href={`/trainer/sessions/${live.id}`}
           className="group relative isolate flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-lg bg-inverse px-5 py-5 text-ink-inverse shadow-(--shadow-3) sm:px-6"
         >
-          <span aria-hidden className="absolute -top-16 -right-10 -z-10 size-56 rounded-full bg-accent/30 blur-3xl" />
+          <span
+            aria-hidden
+            className="absolute -top-16 -right-10 -z-10 size-56 rounded-full bg-accent/30 blur-3xl"
+          />
           <span className="flex items-center gap-4">
             <span className="relative flex size-3" aria-hidden>
               <span className="absolute inset-0 animate-ping rounded-full bg-accent opacity-60" />
@@ -63,7 +66,10 @@ export default async function TrainerOverviewPage() {
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-md bg-ink-inverse px-3 py-2 text-sm font-semibold text-ink">
             Open live session{" "}
-            <ArrowRight className="size-4 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden />
+            <ArrowRight
+              className="size-4 transition-transform duration-150 group-hover:translate-x-0.5"
+              aria-hidden
+            />
           </span>
         </Link>
       ) : null}
@@ -77,7 +83,12 @@ export default async function TrainerOverviewPage() {
           icon={Clock}
           tone="accent"
         />
-        <Metric label="Upcoming (later)" value={upcoming.length} foot="Confirmed or pending" icon={CalendarRange} />
+        <Metric
+          label="Upcoming (later)"
+          value={upcomingCount}
+          foot="Confirmed or pending"
+          icon={CalendarRange}
+        />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
@@ -170,7 +181,6 @@ export default async function TrainerOverviewPage() {
           </CardContent>
         </Card>
       ) : null}
-
     </div>
   );
 }

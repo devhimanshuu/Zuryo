@@ -28,7 +28,7 @@ import { getDb } from "@/lib/db";
 import { calculatePriceBreakdown, formatINR } from "@/lib/pricing";
 import { safely } from "@/lib/utils/errors";
 import { formatSlot, formatTime } from "@/lib/utils/format";
-import { getPricingAdminView } from "@/server/booking/pricing-service";
+import { getActivePricingRules } from "@/server/booking/pricing-service";
 import { getAiUsage } from "@/server/fitness/fitness-service";
 import { getOperationsFinance, getOperationsOverview } from "@/server/queries/operations";
 import { getSessionsNeedingAttention } from "@/server/sessions/session-service";
@@ -42,22 +42,28 @@ export default async function OperationsOverviewPage() {
       getOperationsOverview(),
       getOperationsFinance(),
       getSessionsNeedingAttention(db, new Date()),
-      getPricingAdminView(db),
+      getActivePricingRules(db),
       getAiUsage(db),
     ]);
     return { ...overview, finance, attention, pricing, ai };
   });
   if (!result.ok) return <ErrorState message={result.error.message} />;
-  const { counts, unassigned, recent, activeTrainers, finance, attention, pricing, ai } = result.data;
+  const { counts, unassigned, unassignedCount, recent, activeTrainers, finance, attention, pricing, ai } =
+    result.data;
   const total = Object.values(counts).reduce<number>((s, n) => s + (n ?? 0), 0);
-  const needsAttention = attention.overdue.length + attention.notStarted.length;
+  const needsAttention = attention.overdueCount + attention.notStartedCount;
   const packageFigures: Array<[string, number]> = [
     ["Active", finance.packages.active],
     ["Sessions left", finance.packages.sessionsRemaining],
     ["Used up / expired", finance.packages.exhausted + finance.packages.expired],
     ["Awaiting payment", finance.packages.pendingPayment],
   ];
-  const paymentLabel = { SUCCEEDED: "Succeeded", FAILED: "Declined", REFUNDED: "Refunded", PENDING: "Pending" } as const;
+  const paymentLabel = {
+    SUCCEEDED: "Succeeded",
+    FAILED: "Declined",
+    REFUNDED: "Refunded",
+    PENDING: "Pending",
+  } as const;
   const paymentTone = {
     SUCCEEDED: "text-success",
     FAILED: "text-danger",
@@ -91,7 +97,9 @@ export default async function OperationsOverviewPage() {
           <h2 id="money-h" className="text-heading-md font-semibold">
             Payments and commission <span className="font-normal text-ink-muted">(simulated)</span>
           </h2>
-          <p className="text-body-sm text-ink-muted">Sums of persisted payment records. No real money moved.</p>
+          <p className="text-body-sm text-ink-muted">
+            Sums of persisted payment records. No real money moved.
+          </p>
         </div>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Metric
@@ -237,8 +245,9 @@ export default async function OperationsOverviewPage() {
                 <Siren className="size-4 text-warning" aria-hidden /> Sessions needing attention
               </CardTitle>
               <p className="text-body-sm text-ink-muted">
-                In progress past their 60-minute end but not yet closed, or confirmed and never started. Warnings and
-                completions are applied when an affected page is opened, by the cron endpoint, or with this button.
+                In progress past their 60-minute end but not yet closed, or confirmed and never started.
+                Warnings and completions are applied when an affected page is opened, by the cron endpoint, or
+                with this button.
               </p>
             </div>
             <ReconcileButton />
@@ -246,7 +255,10 @@ export default async function OperationsOverviewPage() {
           <CardContent className="px-0 pb-2">
             {needsAttention === 0 ? (
               <div className="px-5 pb-3">
-                <EmptyState title="Nothing overdue" body="Every in-progress session is within its 60 minutes." />
+                <EmptyState
+                  title="Nothing overdue"
+                  body="Every in-progress session is within its 60 minutes."
+                />
               </div>
             ) : (
               <ul className="divide-y divide-hairline">
@@ -258,8 +270,8 @@ export default async function OperationsOverviewPage() {
                         {b.trainer?.user.name ?? "—"}
                       </p>
                       <p className="text-body-sm text-ink-muted">
-                        Should have ended at {b.sessionRecord ? formatTime(b.sessionRecord.endsAt) : "—"}; awaiting
-                        reconciliation
+                        Should have ended at {b.sessionRecord ? formatTime(b.sessionRecord.endsAt) : "—"};
+                        awaiting reconciliation
                       </p>
                     </div>
                     <StatusBadge status={b.status} />
@@ -298,14 +310,14 @@ export default async function OperationsOverviewPage() {
                 {activeTrainers} active trainers across all communities
               </p>
             </div>
-            {unassigned.length > 0 ? (
+            {unassignedCount > 0 ? (
               <span className="inline-flex items-center gap-1.5 rounded-sm bg-warning-soft px-2 py-1 text-xs font-semibold text-warning">
-                <TriangleAlert className="size-3.5" aria-hidden /> {unassigned.length} unassigned
+                <TriangleAlert className="size-3.5" aria-hidden /> {unassignedCount} unassigned
               </span>
             ) : null}
           </CardHeader>
           <CardContent className="px-0 pb-2">
-            {unassigned.length > 0 ? (
+            {unassignedCount > 0 ? (
               <ul className="divide-y divide-hairline">
                 {unassigned.map((b) => (
                   <ScheduleRow
@@ -349,7 +361,9 @@ export default async function OperationsOverviewPage() {
                     </div>
                     <span className="text-right">
                       <span className="block font-semibold tabular">{formatINR(p.amount)}</span>
-                      <span className={`text-xs font-semibold ${paymentTone[p.status]}`}>{paymentLabel[p.status]}</span>
+                      <span className={`text-xs font-semibold ${paymentTone[p.status]}`}>
+                        {paymentLabel[p.status]}
+                      </span>
                     </span>
                   </li>
                 ))}
