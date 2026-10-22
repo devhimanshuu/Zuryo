@@ -7,7 +7,11 @@ import {
   type TokenUsage,
 } from "@/lib/ai/provider";
 import type { RecommendationContext } from "@/lib/fitness/context";
-import { PROSE_LIMITS, PROSE_TOLERANCE, recommendationOutputSchema } from "@/lib/fitness/recommendation-schema";
+import {
+  PROSE_LIMITS,
+  PROSE_TOLERANCE,
+  recommendationOutputSchema,
+} from "@/lib/fitness/recommendation-schema";
 import { buildRuleBasedRecommendation } from "@/lib/fitness/templates";
 
 const ctx: RecommendationContext = {
@@ -55,14 +59,18 @@ const completion = (message: Record<string, unknown>, extra: Record<string, unkn
 describe("openrouter provider", () => {
   it("returns the validated plan from the forced function call and reports usage and the serving model", async () => {
     const { fn, calls } = fakeFetch(
-      completion({ content: null, tool_calls: [{ function: { name: "submit_workout_plan", arguments: JSON.stringify(plan) } }] }),
+      completion({
+        content: null,
+        tool_calls: [{ function: { name: "submit_workout_plan", arguments: JSON.stringify(plan) } }],
+      }),
     );
     let usage: TokenUsage | null = null;
     let servedBy: string | null = null;
-    const out = await openRouterProvider({ apiKey: "k", model: "minimax/minimax-m3.1-flash:free", fetchFn: fn }).generateRecommendation(
-      ctx,
-      { onUsage: (u) => (usage = u), onServedBy: (m) => (servedBy = m) },
-    );
+    const out = await openRouterProvider({
+      apiKey: "k",
+      model: "minimax/minimax-m3.1-flash:free",
+      fetchFn: fn,
+    }).generateRecommendation(ctx, { onUsage: (u) => (usage = u), onServedBy: (m) => (servedBy = m) });
     expect(out.goal).toBe("STRENGTH");
     expect(usage).toEqual({ inputTokens: 1458, outputTokens: 958 });
     expect(servedBy).toBe("openrouter:minimax/minimax-m3.1-flash:free");
@@ -72,22 +80,34 @@ describe("openrouter provider", () => {
     expect(req.body.model).toBe("minimax/minimax-m3.1-flash:free");
     expect(req.body.tool_choice).toEqual({ type: "function", function: { name: "submit_workout_plan" } });
     // The prompt carries profile and history context, never contact details.
-    const user = (req.body.messages as Array<{ role: string; content: string }>).find((m) => m.role === "user")!;
+    const user = (req.body.messages as Array<{ role: string; content: string }>).find(
+      (m) => m.role === "user",
+    )!;
     expect(user.content).toContain("Age: 32");
-    expect(user.content).toContain("Trainer's suggestion after the last session: Lower-body strength next time.");
+    expect(user.content).toContain(
+      "Trainer's suggestion after the last session: Lower-body strength next time.",
+    );
   });
 
   it("sends a comma-separated model setting as an OpenRouter fallback list", async () => {
     const { fn, calls } = fakeFetch(
-      completion({ tool_calls: [{ function: { name: "submit_workout_plan", arguments: JSON.stringify(plan) } }] }),
+      completion({
+        tool_calls: [{ function: { name: "submit_workout_plan", arguments: JSON.stringify(plan) } }],
+      }),
     );
-    await openRouterProvider({ apiKey: "k", model: "a/one:free, b/two:free", fetchFn: fn }).generateRecommendation(ctx);
+    await openRouterProvider({
+      apiKey: "k",
+      model: "a/one:free, b/two:free",
+      fetchFn: fn,
+    }).generateRecommendation(ctx);
     expect(calls[0]!.body.models).toEqual(["a/one:free", "b/two:free"]);
     expect(calls[0]!.body.model).toBeUndefined();
   });
 
   it("accepts a plan returned as fenced JSON text instead of a tool call", async () => {
-    const { fn } = fakeFetch(completion({ content: "```json\n" + JSON.stringify(plan) + "\n```", tool_calls: null }));
+    const { fn } = fakeFetch(
+      completion({ content: "```json\n" + JSON.stringify(plan) + "\n```", tool_calls: null }),
+    );
     const out = await openRouterProvider({ apiKey: "k", fetchFn: fn }).generateRecommendation(ctx);
     expect(out.title).toBe(plan.title);
   });
@@ -96,20 +116,35 @@ describe("openrouter provider", () => {
     const run = (body: unknown, status = 200) =>
       openRouterProvider({ apiKey: "k", fetchFn: fakeFetch(body, status).fn }).generateRecommendation(ctx);
     await expect(run({ error: { code: 429 } }, 429)).rejects.toMatchObject({ kind: "RATE_LIMITED" });
-    await expect(run({ error: { code: 429, message: "rate-limited upstream" } })).rejects.toMatchObject({ kind: "RATE_LIMITED" });
+    await expect(run({ error: { code: 429, message: "rate-limited upstream" } })).rejects.toMatchObject({
+      kind: "RATE_LIMITED",
+    });
     await expect(run({ error: { code: 502 } })).rejects.toMatchObject({ kind: "PROVIDER_ERROR" });
     await expect(run("boom", 500)).rejects.toMatchObject({ kind: "PROVIDER_ERROR" });
     await expect(
       run({
-        choices: [{ finish_reason: "length", message: { tool_calls: [{ function: { name: "submit_workout_plan", arguments: '{"title": "Cut' } }] } }],
+        choices: [
+          {
+            finish_reason: "length",
+            message: {
+              tool_calls: [{ function: { name: "submit_workout_plan", arguments: '{"title": "Cut' } }],
+            },
+          },
+        ],
       }),
     ).rejects.toMatchObject({ kind: "INVALID_OUTPUT" });
     await expect(
-      run(completion({ tool_calls: [{ function: { name: "submit_workout_plan", arguments: '{"goal":"STRENGTH"}' } }] })),
+      run(
+        completion({
+          tool_calls: [{ function: { name: "submit_workout_plan", arguments: '{"goal":"STRENGTH"}' } }],
+        }),
+      ),
     ).rejects.toMatchObject({ kind: "INVALID_OUTPUT" });
-    await expect(openRouterProvider({ apiKey: undefined }).generateRecommendation(ctx)).rejects.toMatchObject({
-      kind: "UNCONFIGURED",
-    });
+    await expect(openRouterProvider({ apiKey: undefined }).generateRecommendation(ctx)).rejects.toMatchObject(
+      {
+        kind: "UNCONFIGURED",
+      },
+    );
   });
 });
 
@@ -131,11 +166,38 @@ describe("anthropic provider request shape", () => {
 });
 
 describe("provider selection", () => {
-  it("prefers OpenRouter, then Anthropic, and is unconfigured with neither key", async () => {
-    expect(aiProviderFromEnv({ OPENROUTER_API_KEY: "o", ANTHROPIC_API_KEY: "a" }).model).toMatch(/^openrouter:/);
-    expect(aiProviderFromEnv({ OPENROUTER_MODEL: "x/y", OPENROUTER_API_KEY: "o" }).model).toBe("openrouter:x/y");
+  it("chains the configured free providers by default, then falls back to Anthropic", async () => {
+    const chain = aiProviderFromEnv({ GROQ_API_KEY: "g", OPENROUTER_API_KEY: "o" });
+    expect(chain.model).toMatch(/^groq:.* > openrouter:/);
+    expect(aiProviderFromEnv({ OPENROUTER_API_KEY: "o", ANTHROPIC_API_KEY: "a" }).model).toMatch(
+      /^openrouter:/,
+    );
+    expect(aiProviderFromEnv({ OPENROUTER_MODEL: "x/y", OPENROUTER_API_KEY: "o" }).model).toBe(
+      "openrouter:x/y",
+    );
     expect(aiProviderFromEnv({ ANTHROPIC_API_KEY: "a" }).model).toBe("anthropic:claude-haiku-5-5");
-    await expect(aiProviderFromEnv({}).generateRecommendation(ctx)).rejects.toMatchObject({ kind: "UNCONFIGURED" });
+    await expect(aiProviderFromEnv({}).generateRecommendation(ctx)).rejects.toMatchObject({
+      kind: "UNCONFIGURED",
+    });
+  });
+
+  it("honours an explicit AI_PROVIDER and does not silently switch vendors", async () => {
+    expect(
+      aiProviderFromEnv({ AI_PROVIDER: "groq", GROQ_API_KEY: "g", OPENROUTER_API_KEY: "o" }).model,
+    ).toMatch(/^groq:/);
+    const openrouter = aiProviderFromEnv({
+      AI_PROVIDER: "openrouter",
+      GROQ_API_KEY: "g",
+      OPENROUTER_API_KEY: "o",
+    });
+    expect(openrouter.model).toMatch(/^openrouter:/);
+    expect(openrouter.model).not.toContain(" > ");
+    expect(
+      aiProviderFromEnv({ AI_PROVIDER: "anthropic", GROQ_API_KEY: "g", ANTHROPIC_API_KEY: "a" }).model,
+    ).toMatch(/^anthropic:/);
+    await expect(
+      aiProviderFromEnv({ AI_PROVIDER: "groq", OPENROUTER_API_KEY: "o" }).generateRecommendation(ctx),
+    ).rejects.toMatchObject({ kind: "UNCONFIGURED" });
   });
 });
 

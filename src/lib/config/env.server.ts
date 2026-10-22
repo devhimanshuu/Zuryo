@@ -19,10 +19,15 @@ const serverEnvSchema = z.object({
   /** Bearer token for /api/cron/session-lifecycle. Unset = the endpoint is disabled. */
   CRON_SECRET: optional(z.string().min(16, "CRON_SECRET must be at least 16 characters")),
   /**
-   * AI features (workout recommendations and the fitness coach). Groq is tried first, then
-   * OpenRouter, for whichever keys are set; with neither, recommendations use the rule-based plan
-   * and the coach its rule-based replies (both labelled as such in the UI).
+   * AI features (workout recommendations and the fitness coach). "auto" chains Groq then
+   * OpenRouter for whichever keys are set; an explicit value uses only that vendor. The coach has
+   * no Anthropic client, so with "anthropic" it answers from curated replies while recommendations
+   * use Anthropic. With no key at all both features use their rule-based replies (labelled as such).
    */
+  AI_PROVIDER: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.enum(["auto", "groq", "openrouter", "anthropic"]).default("auto"),
+  ),
   GROQ_API_KEY: optional(z.string()),
   /** Groq model id, or a comma-separated list tried in order (default: src/lib/ai/provider.ts). */
   GROQ_MODEL: optional(z.string()),

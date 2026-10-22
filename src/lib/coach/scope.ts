@@ -64,7 +64,7 @@ export const DECLINE_REPLY: Record<"MEDICAL" | "OUT_OF_SCOPE", string> = {
 const HEURISTICS: Array<[Exclude<CoachTopic, "OUT_OF_SCOPE">, RegExp]> = [
   [
     "MEDICAL",
-    /\b(medicines?|medication|pills?|tablets?|dose|dosage|diagnos\w*|injur\w*|physio\w*|surgery|pregnan\w*|diabet\w*|blood pressure|asthma|arthritis|slipped disc|hernia|doctor|steroids?)\b/i,
+    /\b(medicines?|medication|pills?|tablets?|dose|dosage|diagnos\w*|injur\w*|physio\w*|surgery|pregnan\w*|diabet\w*|blood pressure|asthma|arthritis|slipped disc|hernia|doctor|steroids?|ibuprofen|paracetamol|aspirin|pains?|hurts?|aching|aches|ache|symptom\w*|fever|cough)\b/i,
   ],
   [
     "MY_ZURYO",

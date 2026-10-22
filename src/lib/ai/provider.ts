@@ -1,31 +1,24 @@
 import "server-only";
 import { z } from "zod";
 import { contextToPrompt, type RecommendationContext } from "@/lib/fitness/context";
-import {
-  recommendationOutputSchema,
-  type RecommendationOutput,
-} from "@/lib/fitness/recommendation-schema";
+import { recommendationOutputSchema, type RecommendationOutput } from "@/lib/fitness/recommendation-schema";
 
 /**
  * Server-only AI provider abstraction. Three vendors are integrated behind one interface:
- *   - Groq (OpenAI-compatible chat completions, free tier), tried first when GROQ_API_KEY is set;
- *   - OpenRouter (OpenAI-compatible, free models with routing), next when OPENROUTER_API_KEY is set;
- *   - the Anthropic Messages API (tool call), used only when neither of those keys is set.
- * With several keys the providers form a failover chain: a rate limit, timeout or bad answer from
- * one moves on to the next. The recommendation service only sees `AiProvider`, so vendors can
- * change without touching the business logic, and with no key every request uses the rule-based
- * fallback.
+ *   - Groq (OpenAI-compatible chat completions, free tier);
+ *   - OpenRouter (OpenAI-compatible, free models with routing);
+ *   - the Anthropic Messages API (tool call).
+ * `AI_PROVIDER` can force one vendor; by default ("auto") the configured vendors form a failover
+ * chain, Groq first, so a rate limit, timeout or bad answer moves on to the next. The
+ * recommendation service only sees `AiProvider`, so vendors can change without touching the
+ * business logic, and with no key every request uses the rule-based fallback.
  *
  * The provider never sees anything beyond the bounded RecommendationContext; it cannot book, price
  * or mutate anything, and its output is validated against the recommendation schema before use.
  */
 
 export type ProviderFailureKind =
-  | "UNCONFIGURED"
-  | "TIMEOUT"
-  | "RATE_LIMITED"
-  | "PROVIDER_ERROR"
-  | "INVALID_OUTPUT";
+  "UNCONFIGURED" | "TIMEOUT" | "RATE_LIMITED" | "PROVIDER_ERROR" | "INVALID_OUTPUT";
 
 export class AiProviderError extends Error {
   public readonly kind: ProviderFailureKind;
@@ -103,7 +96,16 @@ const OUTPUT_JSON_SCHEMA = {
     intensity: { type: "string", enum: ["LOW", "MODERATE", "HIGH"] },
     goal: {
       type: "string",
-      enum: ["WEIGHT_LOSS", "STRENGTH", "MOBILITY", "ENDURANCE", "POSTURE", "GENERAL_FITNESS", "CONSISTENCY", "BALANCE"],
+      enum: [
+        "WEIGHT_LOSS",
+        "STRENGTH",
+        "MOBILITY",
+        "ENDURANCE",
+        "POSTURE",
+        "GENERAL_FITNESS",
+        "CONSISTENCY",
+        "BALANCE",
+      ],
     },
     warmup: { type: "string", minLength: 10, maxLength: 200 },
     cooldown: { type: "string", minLength: 10, maxLength: 200 },
@@ -114,7 +116,18 @@ const OUTPUT_JSON_SCHEMA = {
     equipment: {
       type: "array",
       maxItems: 5,
-      items: { type: "string", enum: ["NONE", "MAT", "DUMBBELLS", "RESISTANCE_BAND", "KETTLEBELL", "SKIPPING_ROPE", "STATIONARY_BIKE"] },
+      items: {
+        type: "string",
+        enum: [
+          "NONE",
+          "MAT",
+          "DUMBBELLS",
+          "RESISTANCE_BAND",
+          "KETTLEBELL",
+          "SKIPPING_ROPE",
+          "STATIONARY_BIKE",
+        ],
+      },
     },
     exercises: {
       type: "array",
@@ -309,7 +322,10 @@ export function openRouterProvider(opts: OpenRouterProviderOptions = {}): AiProv
             { role: "user", content: contextToPrompt(ctx) },
           ],
           tools: [
-            { type: "function", function: { name: TOOL_NAME, description: TOOL_DESCRIPTION, parameters: OUTPUT_JSON_SCHEMA } },
+            {
+              type: "function",
+              function: { name: TOOL_NAME, description: TOOL_DESCRIPTION, parameters: OUTPUT_JSON_SCHEMA },
+            },
           ],
           tool_choice: { type: "function", function: { name: TOOL_NAME } },
         },
@@ -331,7 +347,10 @@ export function openRouterProvider(opts: OpenRouterProviderOptions = {}): AiProv
       if (typeof served === "string" && served) hooks?.onServedBy?.(`openrouter:${served}`);
       const finish = (json as { choices?: Array<{ finish_reason?: unknown }> })?.choices?.[0]?.finish_reason;
       if (finish === "length") {
-        throw new AiProviderError("INVALID_OUTPUT", "The AI provider's answer was cut off at the token limit");
+        throw new AiProviderError(
+          "INVALID_OUTPUT",
+          "The AI provider's answer was cut off at the token limit",
+        );
       }
       return validatePlan(extractChatCompletionPlan(json));
     },
@@ -395,7 +414,11 @@ export function groqProvider(opts: GroqProviderOptions = {}): AiProvider {
               tools: [
                 {
                   type: "function",
-                  function: { name: TOOL_NAME, description: TOOL_DESCRIPTION, parameters: OUTPUT_JSON_SCHEMA },
+                  function: {
+                    name: TOOL_NAME,
+                    description: TOOL_DESCRIPTION,
+                    parameters: OUTPUT_JSON_SCHEMA,
+                  },
                 },
               ],
               tool_choice: { type: "function", function: { name: TOOL_NAME } },
@@ -405,9 +428,13 @@ export function groqProvider(opts: GroqProviderOptions = {}): AiProvider {
           const usage = (json as { usage?: { prompt_tokens?: unknown; completion_tokens?: unknown } })?.usage;
           const inputTokens = count(usage?.prompt_tokens);
           const outputTokens = count(usage?.completion_tokens);
-          const finish = (json as { choices?: Array<{ finish_reason?: unknown }> })?.choices?.[0]?.finish_reason;
+          const finish = (json as { choices?: Array<{ finish_reason?: unknown }> })?.choices?.[0]
+            ?.finish_reason;
           if (finish === "length") {
-            throw new AiProviderError("INVALID_OUTPUT", "The AI provider's answer was cut off at the token limit");
+            throw new AiProviderError(
+              "INVALID_OUTPUT",
+              "The AI provider's answer was cut off at the token limit",
+            );
           }
           const plan = validatePlan(extractChatCompletionPlan(json));
           if (inputTokens !== null && outputTokens !== null) hooks?.onUsage?.({ inputTokens, outputTokens });
@@ -415,7 +442,9 @@ export function groqProvider(opts: GroqProviderOptions = {}): AiProvider {
           return plan;
         } catch (err) {
           lastError =
-            err instanceof AiProviderError ? err : new AiProviderError("PROVIDER_ERROR", "Unexpected provider failure", err);
+            err instanceof AiProviderError
+              ? err
+              : new AiProviderError("PROVIDER_ERROR", "Unexpected provider failure", err);
           if (!RETRYABLE.has(lastError.kind)) throw lastError;
         }
       }
@@ -445,7 +474,9 @@ export function chainProviders(providers: AiProvider[]): AiProvider {
           return plan;
         } catch (err) {
           lastError =
-            err instanceof AiProviderError ? err : new AiProviderError("PROVIDER_ERROR", "Unexpected provider failure", err);
+            err instanceof AiProviderError
+              ? err
+              : new AiProviderError("PROVIDER_ERROR", "Unexpected provider failure", err);
           if (!RETRYABLE.has(lastError.kind)) throw lastError;
         }
       }
@@ -454,8 +485,12 @@ export function chainProviders(providers: AiProvider[]): AiProvider {
   };
 }
 
+/** A vendor that can be selected explicitly; "auto" keeps the failover chain. */
+export type AiProviderName = "groq" | "openrouter" | "anthropic";
+
 /** The env subset that decides which provider runs. */
 export type AiProviderEnv = {
+  AI_PROVIDER?: AiProviderName | "auto";
   GROQ_API_KEY?: string;
   GROQ_MODEL?: string;
   OPENROUTER_API_KEY?: string;
@@ -466,18 +501,39 @@ export type AiProviderEnv = {
 };
 
 /**
- * Groq, then OpenRouter, for whichever keys are set (both free tiers, chained for failover). With
- * neither, Anthropic, which reports UNCONFIGURED without its key, so the service falls back to the
- * rule-based plan and labels it honestly.
+ * An explicit `AI_PROVIDER` uses only that vendor — a missing key is then UNCONFIGURED rather than
+ * a silent switch to another vendor, so the configured choice is honest. The default "auto" chains
+ * Groq then OpenRouter for whichever keys are set; with neither, Anthropic, which reports
+ * UNCONFIGURED without its key, so the service falls back to the rule-based plan and labels it.
  */
 export function aiProviderFromEnv(env: AiProviderEnv): AiProvider {
-  const chain: AiProvider[] = [];
-  if (env.GROQ_API_KEY) chain.push(groqProvider({ apiKey: env.GROQ_API_KEY, model: env.GROQ_MODEL }));
-  if (env.OPENROUTER_API_KEY) {
-    chain.push(openRouterProvider({ apiKey: env.OPENROUTER_API_KEY, model: env.OPENROUTER_MODEL, appUrl: env.APP_URL }));
+  switch (env.AI_PROVIDER) {
+    case "groq":
+      return groqProvider({ apiKey: env.GROQ_API_KEY, model: env.GROQ_MODEL });
+    case "openrouter":
+      return openRouterProvider({
+        apiKey: env.OPENROUTER_API_KEY,
+        model: env.OPENROUTER_MODEL,
+        appUrl: env.APP_URL,
+      });
+    case "anthropic":
+      return anthropicProvider({ apiKey: env.ANTHROPIC_API_KEY, model: env.ANTHROPIC_MODEL });
+    default: {
+      const chain: AiProvider[] = [];
+      if (env.GROQ_API_KEY) chain.push(groqProvider({ apiKey: env.GROQ_API_KEY, model: env.GROQ_MODEL }));
+      if (env.OPENROUTER_API_KEY) {
+        chain.push(
+          openRouterProvider({
+            apiKey: env.OPENROUTER_API_KEY,
+            model: env.OPENROUTER_MODEL,
+            appUrl: env.APP_URL,
+          }),
+        );
+      }
+      if (chain.length > 0) return chainProviders(chain);
+      return anthropicProvider({ apiKey: env.ANTHROPIC_API_KEY || undefined, model: env.ANTHROPIC_MODEL });
+    }
   }
-  if (chain.length > 0) return chainProviders(chain);
-  return anthropicProvider({ apiKey: env.ANTHROPIC_API_KEY || undefined, model: env.ANTHROPIC_MODEL });
 }
 
 /** Picks the submit_workout_plan tool input out of a Messages API response. */
@@ -524,7 +580,9 @@ function extractChatCompletionPlan(json: unknown): unknown {
                   tool_calls: z
                     .array(
                       z
-                        .object({ function: z.object({ name: z.string(), arguments: z.string() }).passthrough() })
+                        .object({
+                          function: z.object({ name: z.string(), arguments: z.string() }).passthrough(),
+                        })
                         .passthrough(),
                     )
                     .nullish(),

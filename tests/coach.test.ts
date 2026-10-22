@@ -4,6 +4,7 @@ import type { CoachContext } from "@/lib/coach/context";
 import { coachContextToPrompt } from "@/lib/coach/context";
 import { runCoach, sanitizeReply, type CoachModel } from "@/lib/coach/graph";
 import { COACH_LIMITS, heuristicTopic, parseTopic, safetyGuard } from "@/lib/coach/scope";
+import { coachModelsFromEnv } from "@/server/coach/models";
 
 const ctx: CoachContext = {
   firstName: "Priya",
@@ -16,11 +17,18 @@ const ctx: CoachContext = {
   preferences: ["Morning"],
   limitations: "Tight shoulders",
   avoid: null,
-  nextSession: { when: "Fri, 23 Oct · 10:00 AM", category: "Strength training", trainerFirstName: "Arjun", status: "CONFIRMED" },
+  nextSession: {
+    when: "Fri, 23 Oct · 10:00 AM",
+    category: "Strength training",
+    trainerFirstName: "Arjun",
+    status: "CONFIRMED",
+  },
   upcomingCount: 1,
   pkg: { name: "Fitness Pack", remaining: 6, total: 10, validUntil: "Tue, 5 Jan" },
   completedCount: 3,
-  recentSessions: [{ date: "Mon, 19 Oct", category: "Cardio", trainerSuggestion: "Lower-body strength next" }],
+  recentSessions: [
+    { date: "Mon, 19 Oct", category: "Cardio", trainerSuggestion: "Lower-body strength next" },
+  ],
   latestPlan: null,
 };
 
@@ -64,7 +72,13 @@ describe("coach graph routing", () => {
         { role: "ASSISTANT", content: "Hello Priya!" },
       ],
     });
-    expect(r).toMatchObject({ route: "ANSWERED", source: "AI", modelId: "groq:big", topic: "WORKOUT", errors: [] });
+    expect(r).toMatchObject({
+      route: "ANSWERED",
+      source: "AI",
+      modelId: "groq:big",
+      topic: "WORKOUT",
+      errors: [],
+    });
     expect(r.reply).toBe("Warm up with 5 minutes of brisk walking.");
     const sent = answerer.calls[0]!;
     expect(sent).toHaveLength(4); // system + 2 history + question
@@ -103,7 +117,10 @@ describe("coach graph routing", () => {
 
   it("fails over to the next model on a rate limit and reports which model answered", async () => {
     const r = await runCoach(
-      deps([fake("c", "RECOVERY")], [fake("groq:big", rateLimited()), fake("openrouter:free", "Rest and hydrate.")]),
+      deps(
+        [fake("c", "RECOVERY")],
+        [fake("groq:big", rateLimited()), fake("openrouter:free", "Rest and hydrate.")],
+      ),
       { question: "My legs are sore", history: [] },
     );
     expect(r).toMatchObject({ source: "AI", modelId: "openrouter:free", errors: ["RATE_LIMITED"] });
@@ -111,10 +128,13 @@ describe("coach graph routing", () => {
   });
 
   it("uses the heuristic when the classifier fails, and a grounded rule-based reply when every model fails", async () => {
-    const r = await runCoach(deps([fake("c", rateLimited())], [fake("a", new Error("boom")), fake("b", "   ")]), {
-      question: "How many sessions are left in my package?",
-      history: [],
-    });
+    const r = await runCoach(
+      deps([fake("c", rateLimited())], [fake("a", new Error("boom")), fake("b", "   ")]),
+      {
+        question: "How many sessions are left in my package?",
+        history: [],
+      },
+    );
     expect(r).toMatchObject({
       classifiedBy: "heuristic",
       topic: "MY_ZURYO",
@@ -152,6 +172,33 @@ describe("coach graph routing", () => {
   });
 });
 
+describe("coach provider selection", () => {
+  it("uses both free providers by default, only the selected vendor when forced, and none for Anthropic", () => {
+    const ids = (models: ReturnType<typeof coachModelsFromEnv>) => [
+      ...models.classifiers.map((m) => m.id),
+      ...models.answerers.map((m) => m.id),
+    ];
+    const auto = ids(coachModelsFromEnv({ GROQ_API_KEY: "g", OPENROUTER_API_KEY: "o" }));
+    expect(auto.some((id) => id.startsWith("groq:"))).toBe(true);
+    expect(auto.some((id) => id.startsWith("openrouter:"))).toBe(true);
+
+    expect(
+      ids(coachModelsFromEnv({ AI_PROVIDER: "groq", GROQ_API_KEY: "g", OPENROUTER_API_KEY: "o" })).every(
+        (id) => id.startsWith("groq:"),
+      ),
+    ).toBe(true);
+    expect(
+      ids(
+        coachModelsFromEnv({ AI_PROVIDER: "openrouter", GROQ_API_KEY: "g", OPENROUTER_API_KEY: "o" }),
+      ).every((id) => id.startsWith("openrouter:")),
+    ).toBe(true);
+    expect(
+      ids(coachModelsFromEnv({ AI_PROVIDER: "anthropic", GROQ_API_KEY: "g", OPENROUTER_API_KEY: "o" })),
+    ).toEqual([]);
+    expect(ids(coachModelsFromEnv({}))).toEqual([]);
+  });
+});
+
 describe("coach scope helpers", () => {
   it("flags emergencies and self-harm, and nothing for ordinary training talk", () => {
     expect(safetyGuard("I fainted during cardio")).toBe("EMERGENCY");
@@ -172,6 +219,16 @@ describe("coach scope helpers", () => {
     expect(heuristicTopic("can I take ibuprofen dosage")).toBe("MEDICAL");
     expect(heuristicTopic("when is my next session")).toBe("MY_ZURYO");
     expect(heuristicTopic("write me a python script")).toBe("OUT_OF_SCOPE");
+  });
+
+  it("holds pain and medication questions back as medical, not merely out of scope", () => {
+    // The rule-based classifier stands in for the model when no provider answers, and it must
+    // route a medical question to the medical refusal rather than the generic one.
+    expect(heuristicTopic("Can I take ibuprofen for my knee pain?")).toBe("MEDICAL");
+    expect(heuristicTopic("my shoulder aches after training")).toBe("MEDICAL");
+    expect(heuristicTopic("how much paracetamol is safe")).toBe("MEDICAL");
+    // Training talk that merely mentions training is not medical.
+    expect(heuristicTopic("How should I warm up before strength training?")).toBe("WORKOUT");
   });
 
   it("cleans and bounds model output", () => {

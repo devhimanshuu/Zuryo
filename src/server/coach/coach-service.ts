@@ -39,6 +39,7 @@ export function defaultCoachDeps(): CoachDeps {
     now: () => new Date(),
     tx: DEFAULT_TX_OPTIONS,
     models: coachModelsFromEnv({
+      AI_PROVIDER: env.AI_PROVIDER,
       GROQ_API_KEY: env.GROQ_API_KEY,
       GROQ_MODEL: env.GROQ_MODEL,
       GROQ_FAST_MODEL: env.GROQ_FAST_MODEL,
@@ -64,7 +65,15 @@ export async function getCoachThread(
     // `id` breaks ties: rows stored in the same millisecond still keep insertion order.
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: limit,
-    select: { id: true, role: true, content: true, route: true, source: true, modelId: true, createdAt: true },
+    select: {
+      id: true,
+      role: true,
+      content: true,
+      route: true,
+      source: true,
+      modelId: true,
+      createdAt: true,
+    },
   });
   return rows.reverse().map((m) => ({
     id: m.id,
@@ -295,7 +304,15 @@ export async function askCoach(
       modelId: result.modelId,
       createdAt: now,
     },
-    select: { id: true, role: true, content: true, route: true, source: true, modelId: true, createdAt: true },
+    select: {
+      id: true,
+      role: true,
+      content: true,
+      route: true,
+      source: true,
+      modelId: true,
+      createdAt: true,
+    },
   });
 
   try {

@@ -1,7 +1,7 @@
 import "server-only";
 import { ChatGroq } from "@langchain/groq";
 import { ChatOpenAI } from "@langchain/openai";
-import { DEFAULT_GROQ_MODEL, DEFAULT_OPENROUTER_MODEL } from "@/lib/ai/provider";
+import { DEFAULT_GROQ_MODEL, DEFAULT_OPENROUTER_MODEL, type AiProviderName } from "@/lib/ai/provider";
 import type { CoachModel, CoachModels } from "@/lib/coach/graph";
 
 /** Fast model for one-word classification (Groq free tier). */
@@ -9,6 +9,7 @@ export const DEFAULT_GROQ_FAST_MODEL = "openai/gpt-oss-20b";
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 export type CoachModelEnv = {
+  AI_PROVIDER?: AiProviderName | "auto";
   GROQ_API_KEY?: string;
   GROQ_MODEL?: string;
   GROQ_FAST_MODEL?: string;
@@ -27,13 +28,18 @@ const list = (v: string) =>
  * LangChain chat models for the coach, in the order the graph tries them: Groq first (fast, free
  * tier), then OpenRouter's free models (OpenRouter itself routes across the comma-separated list).
  * Retries are off: a failure moves straight to the next model instead of waiting on backoff.
- * With no keys both lists are empty and the coach answers with its rule-based replies.
+ * An explicit `AI_PROVIDER` restricts the coach to that free-tier vendor; "anthropic" (which the
+ * recommendation engine supports but the coach does not) leaves both lists empty, so the coach
+ * answers from its rule-based replies. With no keys both lists are empty too.
  */
 export function coachModelsFromEnv(env: CoachModelEnv): CoachModels {
   const classifiers: CoachModel[] = [];
   const answerers: CoachModel[] = [];
+  const selected = env.AI_PROVIDER ?? "auto";
+  const useGroq = selected === "auto" || selected === "groq";
+  const useOpenRouter = selected === "auto" || selected === "openrouter";
 
-  if (env.GROQ_API_KEY) {
+  if (env.GROQ_API_KEY && useGroq) {
     const groq = (model: string, opts: { temperature: number; maxTokens: number }) =>
       new ChatGroq({
         apiKey: env.GROQ_API_KEY,
@@ -50,7 +56,7 @@ export function coachModelsFromEnv(env: CoachModelEnv): CoachModels {
     }
   }
 
-  if (env.OPENROUTER_API_KEY) {
+  if (env.OPENROUTER_API_KEY && useOpenRouter) {
     const models = list(env.OPENROUTER_MODEL ?? DEFAULT_OPENROUTER_MODEL);
     const openRouter = (opts: { temperature: number; maxTokens: number }) =>
       new ChatOpenAI({

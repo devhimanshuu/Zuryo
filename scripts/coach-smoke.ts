@@ -1,4 +1,5 @@
 import "dotenv/config";
+import type { AiProviderName } from "@/lib/ai/provider";
 import type { CoachContext } from "@/lib/coach/context";
 import { runCoach } from "@/lib/coach/graph";
 import { coachModelsFromEnv } from "@/server/coach/models";
@@ -21,11 +22,22 @@ const SYNTHETIC: CoachContext = {
   preferences: ["Morning workouts"],
   limitations: "Tight shoulders",
   avoid: "Burpees",
-  nextSession: { when: "Fri, 23 Oct · 10:00 AM", category: "Strength training", trainerFirstName: "Arjun", status: "CONFIRMED" },
+  nextSession: {
+    when: "Fri, 23 Oct · 10:00 AM",
+    category: "Strength training",
+    trainerFirstName: "Arjun",
+    status: "CONFIRMED",
+  },
   upcomingCount: 1,
   pkg: { name: "Fitness Pack", remaining: 6, total: 10, validUntil: "Tue, 5 Jan" },
   completedCount: 3,
-  recentSessions: [{ date: "Mon, 19 Oct", category: "Cardio", trainerSuggestion: "Lower-body strength with a short finisher." }],
+  recentSessions: [
+    {
+      date: "Mon, 19 Oct",
+      category: "Cardio",
+      trainerSuggestion: "Lower-body strength with a short finisher.",
+    },
+  ],
   latestPlan: null,
 };
 
@@ -40,6 +52,7 @@ const QUESTIONS = [
 async function main() {
   const env = process.env;
   const models = coachModelsFromEnv({
+    AI_PROVIDER: env.AI_PROVIDER as AiProviderName | "auto" | undefined,
     GROQ_API_KEY: env.GROQ_API_KEY,
     GROQ_MODEL: env.GROQ_MODEL,
     GROQ_FAST_MODEL: env.GROQ_FAST_MODEL,

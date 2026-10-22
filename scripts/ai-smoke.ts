@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { AiProviderError, aiProviderFromEnv, type TokenUsage } from "@/lib/ai/provider";
+import { AiProviderError, aiProviderFromEnv, type AiProviderName, type TokenUsage } from "@/lib/ai/provider";
 import type { RecommendationContext } from "@/lib/fitness/context";
 
 /**
@@ -34,6 +34,7 @@ async function main() {
   const runs = Math.max(1, Math.min(5, Number(process.argv[2] ?? 1) || 1));
   const env = process.env;
   const provider = aiProviderFromEnv({
+    AI_PROVIDER: env.AI_PROVIDER as AiProviderName | "auto" | undefined,
     GROQ_API_KEY: env.GROQ_API_KEY,
     GROQ_MODEL: env.GROQ_MODEL,
     OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
