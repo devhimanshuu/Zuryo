@@ -9,9 +9,11 @@ export function SignOutButton() {
     <button
       type="button"
       onClick={() => void signOut({ callbackUrl: "/sign-in" })}
-      className="mt-2 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-control bg-raised text-body-sm font-semibold text-ink hover:bg-sunken"
+      title="Sign out"
+      className="grid size-9 shrink-0 place-items-center rounded-md text-ink-muted transition-colors hover:bg-danger-soft hover:text-danger"
     >
-      <LogOut className="size-4" aria-hidden /> Sign out
+      <LogOut className="size-4" aria-hidden />
+      <span className="sr-only">Sign out</span>
     </button>
   );
 }

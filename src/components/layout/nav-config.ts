@@ -2,12 +2,14 @@ import {
   Bell,
   CalendarCheck,
   CalendarClock,
+  CalendarPlus,
   Dumbbell,
   HeartPulse,
   House,
   IndianRupee,
   LayoutDashboard,
   ListChecks,
+  MessageCircle,
   Package,
   Users,
   type LucideIcon,
@@ -20,14 +22,17 @@ export type NavItem = { href: string; label: string; icon: LucideIcon };
  * Navigation per role. Only routes that exist are listed — later phases add items here as their
  * screens ship. Hiding a link is UX only; the server authorises every request (Phase 2+).
  */
-export const NAV: Record<Role, { title: string; items: NavItem[] }> = {
+export const NAV: Record<Role, { title: string; items: NavItem[]; cta?: NavItem }> = {
   CUSTOMER: {
     title: "Customer",
+    /** The one job customers come for, pinned above the menu. */
+    cta: { href: "/customer/bookings/new", label: "Book a session", icon: CalendarPlus },
     items: [
       { href: "/customer", label: "Home", icon: House },
       { href: "/customer/bookings", label: "My bookings", icon: CalendarCheck },
       { href: "/customer/packages", label: "Packages", icon: Package },
       { href: "/customer/fitness", label: "Fitness", icon: HeartPulse },
+      { href: "/customer/coach", label: "Coach", icon: MessageCircle },
       { href: "/customer/notifications", label: "Updates", icon: Bell },
     ],
   },

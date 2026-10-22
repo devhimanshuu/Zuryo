@@ -3,13 +3,13 @@
 import { Menu } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Wordmark } from "@/components/shared/wordmark";
 import type { Role } from "@/lib/validation/enums";
-import { AccountPanel } from "./account-panel";
-import { NavLinks } from "./nav-links";
 
-/** Slide-in drawer for workspace navigation under 1024px. Radix handles focus trap and Escape. */
-export function MobileNav({ role, accountName }: { role: Role; accountName: string }) {
+/**
+ * Slide-in drawer for workspace navigation under 1024px. Radix handles focus trap and Escape.
+ * The drawer shows the same sidebar content as desktop; following any link inside closes it.
+ */
+export function MobileNav({ role, children }: { role: Role; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -23,16 +23,15 @@ export function MobileNav({ role, accountName }: { role: Role; accountName: stri
         </button>
       </DialogTrigger>
       <DialogContent side="left" aria-describedby={undefined}>
-        <div className="flex h-16 items-center px-5">
-          <Wordmark />
-        </div>
         <DialogTitle className="sr-only">Navigation</DialogTitle>
         <DialogDescription className="sr-only">Pages in the {role.toLowerCase()} workspace</DialogDescription>
-        <nav aria-label="Workspace" className="flex-1 px-3">
-          <NavLinks role={role} onNavigate={() => setOpen(false)} />
-        </nav>
-        <div className="border-t border-hairline p-3">
-          <AccountPanel role={role} name={accountName} />
+        <div
+          className="flex min-h-0 flex-1 flex-col"
+          onClickCapture={(e) => {
+            if ((e.target as HTMLElement).closest("a")) setOpen(false);
+          }}
+        >
+          {children}
         </div>
       </DialogContent>
     </Dialog>

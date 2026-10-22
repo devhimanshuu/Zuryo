@@ -1,3 +1,4 @@
+import { ShieldCheck } from "lucide-react";
 import type { Metadata } from "next";
 import { SignInForm } from "@/features/auth/sign-in-form";
 
@@ -6,14 +7,20 @@ export const metadata: Metadata = { title: "Sign in" };
 export default async function SignInPage({ searchParams }: { searchParams: Promise<{ callbackUrl?: string }> }) {
   const { callbackUrl } = await searchParams;
   return (
-    <div className="w-full max-w-md">
-      <h1 className="font-display text-display-md">Sign in to Zuryo</h1>
-      <p className="mt-2 text-ink-muted">
-        Each workspace checks your role server-side. The session is a signed, httpOnly cookie.
+    <div className="w-full max-w-[440px] animate-rise">
+      <p className="flex items-center gap-3 text-eyebrow font-semibold tracking-[0.08em] text-brand uppercase">
+        <span className="h-px w-6 bg-brand" aria-hidden />
+        Welcome back
       </p>
-      <div className="mt-6 rounded-lg border border-hairline bg-raised p-5">
+      <h1 className="mt-3 font-display text-display-md">Sign in to Zuryo</h1>
+      <p className="mt-2 text-ink-muted">Choose your workspace, then sign in with your email and password.</p>
+      <div className="mt-7 rounded-lg border border-hairline bg-raised p-4 shadow-(--shadow-2) sm:p-7">
         <SignInForm callbackUrl={callbackUrl} />
       </div>
+      <p className="mt-5 flex items-center gap-2 text-body-sm text-ink-subtle">
+        <ShieldCheck className="size-4 shrink-0" aria-hidden />
+        Each workspace checks your role on the server before it opens.
+      </p>
     </div>
   );
 }
