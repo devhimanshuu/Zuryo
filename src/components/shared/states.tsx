@@ -62,12 +62,12 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "grid justify-items-center gap-2 rounded-lg border border-dashed border-control bg-raised px-5 py-10 text-center",
+        "relative grid justify-items-center gap-2 overflow-hidden rounded-lg border border-dashed border-control/50 bg-raised px-5 py-10 text-center",
         className,
       )}
     >
       <span
-        className="mb-1 grid size-12 place-items-center rounded-full bg-sunken text-ink-muted"
+        className="mb-2 grid size-12 place-items-center rounded-full bg-brand-soft text-brand ring-8 ring-brand-soft/40"
         aria-hidden
       >
         <Icon className="size-5" />
