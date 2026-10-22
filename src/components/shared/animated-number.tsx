@@ -26,7 +26,8 @@ export function AnimatedNumber({
     const tick = (now: number) => {
       const progress = Math.min(1, (now - start) / duration);
       const eased = 1 - (1 - progress) ** 3;
-      setDisplay(Math.round(value * eased));
+      // Whole steps while counting, then the exact value, so currency keeps its paise.
+      setDisplay(progress < 1 ? Math.round(value * eased) : value);
       if (progress < 1) raf = requestAnimationFrame(tick);
     };
     setDisplay(0);

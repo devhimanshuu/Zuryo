@@ -1,6 +1,6 @@
 "use client";
 
-import { FlaskConical, Sparkles } from "lucide-react";
+import { Dumbbell, FlaskConical } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -84,7 +84,7 @@ export function GenerateRecommendationButton({ goals }: { goals: FitnessGoal[] }
               "Generating…"
             ) : (
               <>
-                <Sparkles aria-hidden /> Generate workout
+                <Dumbbell aria-hidden /> Generate workout
               </>
             )}
           </Button>

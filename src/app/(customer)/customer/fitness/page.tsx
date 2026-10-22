@@ -1,4 +1,4 @@
-import { Dumbbell, Sparkles, Target, TrendingUp, UserRound } from "lucide-react";
+import { Dumbbell, Tag, Target, TrendingUp, UserRound } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
@@ -255,7 +255,7 @@ export default async function FitnessPage({ searchParams }: { searchParams: Prom
                 </p>
               </div>
               <p className="inline-flex items-center gap-1.5 text-body-sm font-semibold text-ink-muted">
-                <Sparkles className="size-4" aria-hidden /> AI or curated — always labelled
+                <Tag className="size-4" aria-hidden /> AI or curated — always labelled
               </p>
             </div>
             <GenerateRecommendationButton goals={activeGoals} />

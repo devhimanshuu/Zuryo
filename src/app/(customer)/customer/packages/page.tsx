@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarPlus, FlaskConical, Sparkles } from "lucide-react";
+import { ArrowRight, BadgePercent, CalendarPlus, FlaskConical } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
@@ -190,7 +190,7 @@ export default async function PackagesPage({
               <li key={plan.id} className="relative">
                 {plan.id === bestValueId ? (
                   <span className="absolute -top-3 left-5 z-10 inline-flex items-center gap-1 rounded-full bg-brand px-2.5 py-1 text-xs font-semibold text-on-brand shadow-(--shadow-2)">
-                    <Sparkles className="size-3.5" aria-hidden /> Best value
+                    <BadgePercent className="size-3.5" aria-hidden /> Best value
                   </span>
                 ) : null}
                 <Card

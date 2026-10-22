@@ -8,8 +8,11 @@ export async function signInAs(page: Page, email: string, workspace: "Customer" 
   // intercepted by the visible label. Click the label that owns the input instead.
   await page.locator(`label:has(input[name="workspace"][value="${workspace.toUpperCase()}"])`).click();
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(E2E_PASSWORD);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  const password = page.getByLabel("Password");
+  await password.fill(E2E_PASSWORD);
+  // Submit from the field: a lazily painted decorative image can occasionally sit over the button
+  // long enough to make a pointer click flaky. Enter exercises the same form submission.
+  await password.press("Enter");
   await page.waitForURL(`**/${workspace.toLowerCase()}`);
 }
 
@@ -17,8 +20,9 @@ export async function signInAs(page: Page, email: string, workspace: "Customer" 
 export async function signInAsCustomer(page: Page, email: string = ALICE.email) {
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(E2E_PASSWORD);
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  const password = page.getByLabel("Password");
+  await password.fill(E2E_PASSWORD);
+  await password.press("Enter");
   await page.waitForURL("**/customer");
 }
 

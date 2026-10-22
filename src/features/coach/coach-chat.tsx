@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, ListChecks, Send, Sparkles, Trash2 } from "lucide-react";
+import { Bot, ListChecks, MessageCircleQuestionMark, Send, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Notice } from "@/components/shared/states";
@@ -114,7 +114,7 @@ export function CoachChat({ initialMessages }: { initialMessages: CoachMessageVi
         {messages.length === 0 ? (
           <div className="grid justify-items-center gap-3 py-8 text-center">
             <span className="grid size-12 place-items-center rounded-full bg-brand-soft text-brand" aria-hidden>
-              <Sparkles className="size-5" />
+              <MessageCircleQuestionMark className="size-5" />
             </span>
             <div>
               <p className="text-heading-md font-semibold">Ask your coach</p>
