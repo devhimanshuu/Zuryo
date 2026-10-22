@@ -1,13 +1,23 @@
-import { CalendarDays, CalendarPlus, Dumbbell, Navigation, ReceiptText, Settings2, Timer } from "lucide-react";
+import {
+  CalendarDays,
+  CalendarPlus,
+  Dumbbell,
+  Navigation,
+  ReceiptText,
+  Settings2,
+  Timer,
+} from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
-import { ErrorState, Notice } from "@/components/shared/states";
+import { ErrorState } from "@/components/shared/states";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardIcon, CardTitle } from "@/components/ui/card";
 import { CancelBookingButton } from "@/features/bookings/cancel-booking-button";
+import { BookingConfirmedMoment } from "@/features/bookings/booking-confirmed-moment";
+import { BookingTimeline } from "@/features/bookings/booking-timeline";
 import { RescheduleBookingButton } from "@/features/bookings/reschedule-booking-button";
 import { PriceBreakdown } from "@/features/bookings/price-breakdown";
 import { TrainerArrival } from "@/features/location/trainer-arrival";
@@ -67,7 +77,11 @@ export default async function BookingDetailPage({
     <div className="grid gap-6">
       <PageHeader
         editorial
-        back={{ href: "/customer/bookings", label: "My bookings" }}
+        breadcrumbs={[
+          { href: "/customer", label: "Home" },
+          { href: "/customer/bookings", label: "Bookings" },
+          { label: <span className="tabular">{b.reference}</span> },
+        ]}
         eyebrow={<span className="tabular">{b.reference}</span>}
         title={`${categoryLabel(b.workoutCategory)}${trainerName ? ` with ${trainerName.split(" ")[0]}` : ""}`}
         description={`${formatSlot(b.startAt, tz)} IST`}
@@ -75,11 +89,18 @@ export default async function BookingDetailPage({
         className="pb-0"
       />
 
+      <BookingTimeline status={b.status} startAt={b.startAt} endAt={b.endAt} />
+
       {created === "1" && b.status === "CONFIRMED" ? (
-        <Notice tone="success" title="You're booked" live>
-          {trainerName ? `${trainerName} has been notified. ` : ""}Your reference is{" "}
-          <span className="font-semibold tabular">{b.reference}</span>.
-        </Notice>
+        <BookingConfirmedMoment
+          bookingId={b.id}
+          reference={b.reference}
+          trainerName={trainerName}
+          startAt={b.startAt.toISOString()}
+          tz={tz}
+          where={b.serviceZone.name}
+          workout={categoryLabel(b.workoutCategory)}
+        />
       ) : null}
 
       {b.status === "IN_PROGRESS" && b.sessionRecord && !b.sessionRecord.completedAt ? (

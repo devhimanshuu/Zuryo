@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState } from "@/components/shared/states";
 import { Card, CardContent, CardHeader, CardIcon, CardTitle } from "@/components/ui/card";
 import { SessionConsole } from "@/features/sessions/session-console";
+import { BookingTimeline } from "@/features/bookings/booking-timeline";
 import { SessionSummaryForm } from "@/features/sessions/session-summary-form";
 import { categoryLabel } from "@/lib/booking/categories";
 import { startWindow } from "@/lib/sessions/lifecycle";
@@ -37,12 +38,18 @@ export default async function TrainerSessionPage({ params }: { params: Promise<{
   return (
     <div className="grid gap-6">
       <PageHeader
-        back={{ href: "/trainer/sessions", label: "My sessions" }}
+        breadcrumbs={[
+          { href: "/trainer", label: "Today" },
+          { href: "/trainer/sessions", label: "My sessions" },
+          { label: <span className="tabular">{b.reference}</span> },
+        ]}
         eyebrow={<span className="tabular">{b.reference}</span>}
         title={`${categoryLabel(b.workoutCategory)} with ${b.customer.user.name}`}
         description={`${formatSlot(b.startAt, tz)} – ${formatTime(b.endAt, tz)} IST · ${b.mode === "INSTANT" ? "Instant" : "Scheduled"}`}
         className="pb-0"
       />
+
+      <BookingTimeline status={b.status} startAt={b.startAt} endAt={b.endAt} />
 
       <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
         <SessionConsole
