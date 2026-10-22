@@ -15,7 +15,7 @@ function prismaEnum(name: string): string[] {
   const m = new RegExp(`enum ${name} \\{([^}]*)\\}`).exec(schema);
   if (!m?.[1]) throw new Error(`enum ${name} not found`);
   return m[1]
-    .split("\n")
+    .split(/\r?\n/) // a Windows checkout (core.autocrlf) has CRLF line endings
     .map((l) => l.replace(/\/\/.*$/, "").trim())
     .filter(Boolean);
 }

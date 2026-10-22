@@ -71,6 +71,7 @@ export const PLANS = {
 } as const;
 
 const TABLES = [
+  "ChatMessage",
   "AiRequestLog",
   "WorkoutRecommendation",
   "FitnessGoalTracking",

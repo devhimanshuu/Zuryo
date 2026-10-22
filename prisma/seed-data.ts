@@ -116,6 +116,11 @@ export const CUSTOMERS: Array<{
   },
 ];
 
+/**
+ * Trainers. `base` is simulated GPS: the point each trainer sets out from, a few kilometres from the
+ * community they serve (Palm Grove: Arjun ~2 km, Kavya ~4.6 km, Sana ~6 km), so distance visibly
+ * changes matching and instant-booking reach. Synthetic coordinates, not real addresses.
+ */
 export const TRAINERS = [
   {
     id: "seed_user_arjun",
@@ -126,6 +131,7 @@ export const TRAINERS = [
     categories: ["STRENGTH", "MOBILITY"],
     experienceYears: 6,
     bio: "Strength and mobility coach. Builds steady, sustainable progress.",
+    base: { latitude: "12.985000", longitude: "77.759000" },
   },
   {
     id: "seed_user_kavya",
@@ -136,6 +142,7 @@ export const TRAINERS = [
     categories: ["CARDIO", "FUNCTIONAL"],
     experienceYears: 4,
     bio: "High-energy interval sessions, adapted to every level.",
+    base: { latitude: "12.940000", longitude: "77.780000" },
   },
   {
     id: "seed_user_rohan",
@@ -146,6 +153,7 @@ export const TRAINERS = [
     categories: ["YOGA", "MOBILITY"],
     experienceYears: 8,
     bio: "Yoga and posture work for desk-bound bodies.",
+    base: { latitude: "12.923000", longitude: "77.638000" },
   },
   {
     id: "seed_user_meera",
@@ -156,6 +164,7 @@ export const TRAINERS = [
     categories: ["CARDIO", "FUNCTIONAL"],
     experienceYears: 5,
     bio: "Endurance and functional training for runners and cyclists.",
+    base: { latitude: "13.018000", longitude: "77.585000" },
   },
   // Phase 2: a second Palm Grove trainer so every workout category has a local coach.
   {
@@ -167,6 +176,7 @@ export const TRAINERS = [
     categories: ["YOGA", "MOBILITY"],
     experienceYears: 7,
     bio: "Breath-led yoga and mobility work for stiff backs and busy schedules.",
+    base: { latitude: "12.990000", longitude: "77.698000" },
   },
 ] as const;
 

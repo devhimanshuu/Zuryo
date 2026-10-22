@@ -19,9 +19,15 @@ const serverEnvSchema = z.object({
   /** Bearer token for /api/cron/session-lifecycle. Unset = the endpoint is disabled. */
   CRON_SECRET: optional(z.string().min(16, "CRON_SECRET must be at least 16 characters")),
   /**
-   * AI workout recommendations. OPENROUTER_API_KEY wins when both keys are set; with neither, every
-   * recommendation uses the deterministic rule-based fallback (labelled as such in the UI).
+   * AI features (workout recommendations and the fitness coach). Groq is tried first, then
+   * OpenRouter, for whichever keys are set; with neither, recommendations use the rule-based plan
+   * and the coach its rule-based replies (both labelled as such in the UI).
    */
+  GROQ_API_KEY: optional(z.string()),
+  /** Groq model id, or a comma-separated list tried in order (default: src/lib/ai/provider.ts). */
+  GROQ_MODEL: optional(z.string()),
+  /** Small, fast Groq model the coach uses to classify questions (default: openai/gpt-oss-20b). */
+  GROQ_FAST_MODEL: optional(z.string()),
   OPENROUTER_API_KEY: optional(z.string()),
   /** OpenRouter model id, or a comma-separated fallback list (default: see src/lib/ai/provider.ts). */
   OPENROUTER_MODEL: optional(z.string()),

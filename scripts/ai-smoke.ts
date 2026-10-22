@@ -34,6 +34,8 @@ async function main() {
   const runs = Math.max(1, Math.min(5, Number(process.argv[2] ?? 1) || 1));
   const env = process.env;
   const provider = aiProviderFromEnv({
+    GROQ_API_KEY: env.GROQ_API_KEY,
+    GROQ_MODEL: env.GROQ_MODEL,
     OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
     OPENROUTER_MODEL: env.OPENROUTER_MODEL,
     ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,

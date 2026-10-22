@@ -87,6 +87,8 @@ async function main() {
           experienceYears: t.experienceYears,
           bio: t.bio,
           isActive: true,
+          baseLatitude: t.base.latitude,
+          baseLongitude: t.base.longitude,
         };
         await tx.trainerProfile.upsert({
           where: { userId: t.id },

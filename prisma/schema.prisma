@@ -191,6 +191,25 @@ enum AiRequestOutcome {
   FAILED
 }
 
+/// Which AI feature an AI request log row belongs to.
+enum AiFeature {
+  RECOMMENDATION
+  COACH
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+}
+
+/// How the coach handled a question: answered it, or held it back by its scope and safety rules.
+enum CoachRoute {
+  ANSWERED
+  SAFETY
+  MEDICAL
+  OUT_OF_SCOPE
+}
+
 // ─── Identity ──────────────────────────────────────────────────────────
 
 model User {
@@ -270,6 +289,7 @@ model CustomerProfile {
   trackedGoals    FitnessGoalTracking[]
   recommendations WorkoutRecommendation[]
   aiRequestLogs   AiRequestLog[]
+  chatMessages    ChatMessage[]
 
   @@index([serviceZoneId])
 }
@@ -284,6 +304,10 @@ model TrainerProfile {
   experienceYears   Int?
   photoUrl          String?
   isActive          Boolean           @default(true)
+  /// Simulated GPS: where the trainer sets out from. Both or neither (DB check). Never sent to
+  /// customers; only derived distance and travel time are.
+  baseLatitude      Decimal?          @db.Decimal(9, 6)
+  baseLongitude     Decimal?          @db.Decimal(9, 6)
   createdAt         DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime          @updatedAt @db.Timestamptz(3)
 
@@ -617,6 +641,7 @@ model WorkoutRecommendation {
 model AiRequestLog {
   id         String             @id @default(cuid())
   customerId String
+  feature    AiFeature          @default(RECOMMENDATION)
   /// What produced the recommendation this attempt ended with (AI or the rule-based fallback).
   source     RecommendationSource
   outcome    AiRequestOutcome
@@ -633,6 +658,26 @@ model AiRequestLog {
   customer CustomerProfile @relation(fields: [customerId], references: [userId], onDelete: Cascade)
 
   @@index([createdAt])
+  @@index([customerId, createdAt])
+}
+
+/// One message in a customer's conversation with the fitness coach. Content is capped in
+/// validation; assistant rows record how the answer was produced. The customer can delete them.
+model ChatMessage {
+  id         String                @id @default(cuid())
+  customerId String
+  role       ChatRole
+  content    String
+  /// Assistant rows: answered, or held back by the scope / safety rules.
+  route      CoachRoute?
+  /// Assistant rows: AI, or the rule-based reply used when no AI provider answered.
+  source     RecommendationSource?
+  /// Assistant rows answered by AI: provider and model that answered.
+  modelId    String?
+  createdAt  DateTime              @default(now()) @db.Timestamptz(3)
+
+  customer CustomerProfile @relation(fields: [customerId], references: [userId], onDelete: Cascade)
+
   @@index([customerId, createdAt])
 }
 
