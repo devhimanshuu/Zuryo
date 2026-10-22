@@ -483,18 +483,25 @@ export async function setRecommendationStatus(
 
 /** Honest AI usage figures: counts straight from the request log, plus recent failure kinds. */
 export async function getAiUsage(db: DbOrTx) {
+  // Recommendation figures only: coach questions are logged with feature COACH and must not be
+  // counted as workout recommendations.
+  const feature = "RECOMMENDATION" as const;
   const [bySource, failures, recent, measured] = await Promise.all([
-    db.aiRequestLog.groupBy({ by: ["source", "outcome"], _count: { _all: true } }),
-    db.aiRequestLog.groupBy({ by: ["errorKind"], where: { errorKind: { not: null } }, _count: { _all: true } }),
+    db.aiRequestLog.groupBy({ by: ["source", "outcome"], where: { feature }, _count: { _all: true } }),
+    db.aiRequestLog.groupBy({
+      by: ["errorKind"],
+      where: { feature, errorKind: { not: null } },
+      _count: { _all: true },
+    }),
     db.aiRequestLog.findMany({
-      where: { errorKind: { not: null } },
+      where: { feature, errorKind: { not: null } },
       orderBy: { createdAt: "desc" },
       take: 5,
       select: { source: true, errorKind: true, createdAt: true },
     }),
     // Measured figures for successful AI calls only (fallback rows have no provider tokens).
     db.aiRequestLog.aggregate({
-      where: { source: "AI", outcome: "SUCCESS", latencyMs: { not: null } },
+      where: { feature, source: "AI", outcome: "SUCCESS", latencyMs: { not: null } },
       _avg: { latencyMs: true, inputTokens: true, outputTokens: true },
       _count: { _all: true },
     }),

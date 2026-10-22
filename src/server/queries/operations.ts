@@ -48,7 +48,7 @@ export async function getOperationsTrainers(now = new Date()) {
     take: 100,
     include: {
       user: { select: { name: true, email: true } },
-      serviceZone: { select: { name: true } },
+      serviceZone: { select: { name: true, latitude: true, longitude: true } },
       _count: {
         select: { bookings: { where: { startAt: { gte: now }, status: { in: ["CONFIRMED", "PENDING"] } } } },
       },

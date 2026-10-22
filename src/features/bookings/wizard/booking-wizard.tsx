@@ -912,6 +912,12 @@ function InstantOffer({ match, tz, onRetry }: { match: MatchResult; tz: string; 
           <span>
             {match.trainers.length} trainer{match.trainers.length === 1 ? "" : "s"} can make it
           </span>
+          {match.trainers[0]?.travel ? (
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="size-4" aria-hidden /> nearest is{" "}
+              {match.trainers[0].travel.roadKm.toFixed(1)} km away
+            </span>
+          ) : null}
           <span className="tabular">
             {match.quote.isPeak ? "Peak · " : ""}
             {formatINR(match.quote.totalAmount)}

@@ -3,6 +3,7 @@ import { WORKOUT_CATEGORIES, WORKOUT_CATEGORY_INFO } from "@/lib/booking/categor
 import { ACTIVE_BOOKING_STATUSES as ACTIVE_STATUSES } from "@/lib/booking/rules";
 import { getDb } from "@/lib/db";
 import { loadCustomerContext } from "@/server/booking/availability-service";
+import { withTrip } from "@/server/location/trip";
 
 /** What the booking wizard needs up front: the customer's community and which workouts it offers. */
 export async function getBookingSetup(userId: string) {
@@ -23,8 +24,16 @@ export async function getBookingSetup(userId: string) {
 
 /** Everything a customer's booking list shows: coverage, payment state and session timing. */
 export const customerBookingInclude = {
-  trainer: { include: { user: { select: { name: true } } } },
-  serviceZone: { select: { name: true } },
+  trainer: {
+    select: {
+      userId: true,
+      specializations: true,
+      baseLatitude: true,
+      baseLongitude: true,
+      user: { select: { name: true } },
+    },
+  },
+  serviceZone: { select: { name: true, latitude: true, longitude: true } },
   package: { select: { name: true } },
   payments: { orderBy: { createdAt: "desc" as const }, select: { status: true, amount: true } },
   packageEntries: { select: { reason: true } },
@@ -38,12 +47,15 @@ export async function getCustomerHome(userId: string, now = new Date()) {
       where: { userId },
       include: { user: { select: { name: true } }, serviceZone: { select: { name: true } } },
     }),
-    db.booking.findMany({
-      where: { customerId: userId, status: { in: [...ACTIVE_STATUSES] }, endAt: { gte: now } },
-      orderBy: { startAt: "asc" },
-      take: 3,
-      include: customerBookingInclude,
-    }),
+    db.booking
+      .findMany({
+        where: { customerId: userId, status: { in: [...ACTIVE_STATUSES] }, endAt: { gte: now } },
+        orderBy: { startAt: "asc" },
+        take: 3,
+        include: customerBookingInclude,
+      })
+      // Trip derived here; the trainer's coordinates are dropped before the page sees the rows.
+      .then((rows) => rows.map(withTrip)),
     db.booking.findMany({
       where: { customerId: userId, status: "COMPLETED" },
       orderBy: { startAt: "desc" },
@@ -62,12 +74,14 @@ export async function getCustomerHome(userId: string, now = new Date()) {
 export async function getCustomerBookings(userId: string) {
   // Latest-first with a generous cap: the list is a demo-scale history view, not an archive.
   // True pagination is a later product decision; the cap keeps the query bounded as data grows.
-  return getDb().booking.findMany({
-    where: { customerId: userId },
-    orderBy: { startAt: "desc" },
-    take: 200,
-    include: customerBookingInclude,
-  });
+  return getDb()
+    .booking.findMany({
+      where: { customerId: userId },
+      orderBy: { startAt: "desc" },
+      take: 200,
+      include: customerBookingInclude,
+    })
+    .then((rows) => rows.map(withTrip));
 }
 
 export async function getCustomerFitness(userId: string) {

@@ -1,11 +1,27 @@
-import { ArrowRight, TriangleAlert } from "lucide-react";
+import {
+  Ban,
+  Bot,
+  CalendarCheck,
+  CircleCheck,
+  CreditCard,
+  HandCoins,
+  IndianRupee,
+  ListChecks,
+  Package,
+  PlayCircle,
+  Receipt,
+  RotateCcw,
+  Siren,
+  TriangleAlert,
+  UserRoundX,
+  Wallet,
+} from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState, EmptyState } from "@/components/shared/states";
 import { Metric } from "@/components/shared/metric";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardIcon, CardLink, CardTitle } from "@/components/ui/card";
 import { ScheduleRow } from "@/features/bookings/schedule-row";
 import { ReconcileButton } from "@/features/operations/reconcile-button";
 import { getDb } from "@/lib/db";
@@ -57,14 +73,16 @@ export default async function OperationsOverviewPage() {
         className="pb-0"
       />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Metric label="Total bookings" value={total} />
-        <Metric label="Confirmed" value={counts.CONFIRMED ?? 0} />
-        <Metric label="In progress" value={counts.IN_PROGRESS ?? 0} />
-        <Metric label="Completed" value={counts.COMPLETED ?? 0} />
+        <Metric label="Total bookings" value={total} icon={ListChecks} />
+        <Metric label="Confirmed" value={counts.CONFIRMED ?? 0} icon={CalendarCheck} />
+        <Metric label="In progress" value={counts.IN_PROGRESS ?? 0} icon={PlayCircle} tone="accent" />
+        <Metric label="Completed" value={counts.COMPLETED ?? 0} icon={CircleCheck} tone="success" />
         <Metric
           label="Cancelled / failed"
           value={(counts.CANCELLED ?? 0) + (counts.FAILED ?? 0)}
           foot={`${counts.FAILED ?? 0} with a declined payment`}
+          icon={Ban}
+          tone="muted"
         />
       </div>
 
@@ -80,21 +98,27 @@ export default async function OperationsOverviewPage() {
             label="Successful payments"
             value={formatINR(finance.succeeded.total)}
             foot={`${finance.payments.SUCCEEDED?.count ?? 0} payments · ${finance.succeeded.packageCount} for packages`}
+            icon={CreditCard}
+            tone="success"
           />
           <Metric
             label="Society commission"
             value={formatINR(finance.succeeded.commission)}
             foot="From successful payments; package sessions count once, at purchase"
+            icon={HandCoins}
           />
           <Metric
             label="Net after commission"
             value={formatINR(finance.succeeded.net)}
             foot="Session and package prices, excluding commission"
+            icon={Wallet}
           />
           <Metric
             label="Declined / refunded"
             value={`${finance.payments.FAILED?.count ?? 0} / ${finance.payments.REFUNDED?.count ?? 0}`}
             foot={`${formatINR(finance.payments.REFUNDED?.amount ?? "0.00")} refunded on cancellations`}
+            icon={RotateCcw}
+            tone="muted"
           />
         </div>
       </section>
@@ -106,11 +130,12 @@ export default async function OperationsOverviewPage() {
               <CardTitle>Packages</CardTitle>
               <p className="text-body-sm text-ink-muted">Customer-owned packages, from package records.</p>
             </div>
+            <CardIcon icon={Package} />
           </CardHeader>
           <CardContent>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+            <dl className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
               {packageFigures.map(([label, value]) => (
-                <div key={label}>
+                <div key={label} className="rounded-md border border-hairline bg-surface px-3 py-2.5">
                   <dt className="text-body-sm text-ink-muted">{label}</dt>
                   <dd className="text-heading-lg font-semibold tabular">{value}</dd>
                 </div>
@@ -127,18 +152,19 @@ export default async function OperationsOverviewPage() {
                 Counts from the recommendation request log. Fallbacks are the deterministic templates.
               </p>
             </div>
+            <CardIcon icon={Bot} />
           </CardHeader>
           <CardContent>
-            <dl className="grid grid-cols-3 gap-x-6 gap-y-3">
-              <div>
+            <dl className="grid grid-cols-3 gap-2.5">
+              <div className="rounded-md border border-hairline bg-surface px-3 py-2.5">
                 <dt className="text-body-sm text-ink-muted">AI-generated</dt>
                 <dd className="text-heading-lg font-semibold tabular">{ai.aiSuccess}</dd>
               </div>
-              <div>
+              <div className="rounded-md border border-hairline bg-surface px-3 py-2.5">
                 <dt className="text-body-sm text-ink-muted">Rule-based fallback</dt>
                 <dd className="text-heading-lg font-semibold tabular">{ai.fallback}</dd>
               </div>
-              <div>
+              <div className="rounded-md border border-hairline bg-surface px-3 py-2.5">
                 <dt className="text-body-sm text-ink-muted">AI attempts failed</dt>
                 <dd className="text-heading-lg font-semibold tabular">{ai.aiFailed}</dd>
               </div>
@@ -178,12 +204,7 @@ export default async function OperationsOverviewPage() {
               <CardTitle>Pricing now</CardTitle>
               <p className="text-body-sm text-ink-muted">Active rules used to price new bookings.</p>
             </div>
-            <Link
-              href="/operations/pricing"
-              className="inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline"
-            >
-              Edit <ArrowRight className="size-4" aria-hidden />
-            </Link>
+            <CardIcon icon={IndianRupee} />
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-[1fr_auto] gap-y-2">
@@ -203,13 +224,18 @@ export default async function OperationsOverviewPage() {
                 ) : null,
               )}
             </dl>
+            <div className="mt-4 border-t border-hairline pt-3">
+              <CardLink href="/operations/pricing">Edit pricing rules</CardLink>
+            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
             <div>
-              <CardTitle>Sessions needing attention</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Siren className="size-4 text-warning" aria-hidden /> Sessions needing attention
+              </CardTitle>
               <p className="text-body-sm text-ink-muted">
                 In progress past their 60-minute end but not yet closed, or confirmed and never started. Warnings and
                 completions are applied when an affected page is opened, by the cron endpoint, or with this button.
@@ -265,7 +291,9 @@ export default async function OperationsOverviewPage() {
         <Card>
           <CardHeader>
             <div>
-              <CardTitle>Needs a trainer</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <UserRoundX className="size-4 text-ink-subtle" aria-hidden /> Needs a trainer
+              </CardTitle>
               <p className="text-body-sm text-ink-muted">
                 {activeTrainers} active trainers across all communities
               </p>
@@ -301,6 +329,7 @@ export default async function OperationsOverviewPage() {
         <Card>
           <CardHeader>
             <CardTitle>Recent payments</CardTitle>
+            <CardIcon icon={Receipt} />
           </CardHeader>
           <CardContent className="px-0 pb-2">
             {finance.recent.length === 0 ? (
@@ -332,6 +361,7 @@ export default async function OperationsOverviewPage() {
         <Card>
           <CardHeader>
             <CardTitle>Recent activity</CardTitle>
+            <CardIcon icon={ListChecks} />
           </CardHeader>
           <CardContent className="px-0 pb-2">
             <ul className="divide-y divide-hairline">

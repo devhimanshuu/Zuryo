@@ -346,6 +346,7 @@ export async function rescheduleBooking(
       from,
       to,
       excludeBookingId: b.id,
+      destination: customer.location,
     }),
     loadCustomerBookings(deps.db, customer.userId, from, to, b.id),
   ]);
@@ -365,7 +366,12 @@ export async function rescheduleBooking(
     return fail("CONFLICT", "You already have a session that overlaps this time.", { alternatives: await alternatives() });
   }
 
-  const ranked = rankTrainers(pool.candidates, { category: b.workoutCategory, startAt, timeZone: tz });
+  const ranked = rankTrainers(pool.candidates, {
+    category: b.workoutCategory,
+    startAt,
+    timeZone: tz,
+    departFrom: now,
+  });
   // Continuity first: the current trainer when they're free, then the matcher's usual order.
   const order = [
     ...ranked.filter((t) => t.trainerId === b.trainerId),

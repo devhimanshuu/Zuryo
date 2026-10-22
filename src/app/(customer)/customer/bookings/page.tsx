@@ -79,22 +79,32 @@ export default async function CustomerBookingsPage() {
           </Button>
         }
       />
-      <nav aria-label="Booking groups" className="mb-6 flex gap-2 overflow-x-auto">
+      <nav aria-label="Booking groups" className="-mx-1 mb-8 flex gap-2 overflow-x-auto px-1 pb-1">
         {groups.map((g) => (
           <a
             key={g.id}
             href={`#${g.id}`}
-            className="rounded-full border border-hairline bg-raised px-3 py-1.5 text-sm font-semibold whitespace-nowrap hover:bg-sunken"
+            className="inline-flex items-center gap-2 rounded-full border border-hairline bg-raised py-1.5 pr-1.5 pl-3.5 text-sm font-semibold whitespace-nowrap shadow-(--shadow-1) transition-colors hover:border-control/40 hover:bg-surface"
           >
-            {g.title} <span className="text-ink-subtle tabular">{g.items.length}</span>
+            {g.title}
+            <span
+              className={
+                g.id === "live"
+                  ? "grid h-6 min-w-6 place-items-center rounded-full bg-accent-soft px-1.5 text-xs text-accent-text tabular"
+                  : "grid h-6 min-w-6 place-items-center rounded-full bg-sunken px-1.5 text-xs text-ink-muted tabular"
+              }
+            >
+              {g.items.length}
+            </span>
           </a>
         ))}
       </nav>
       <div className="grid gap-10">
         {groups.map((g) => (
           <section key={g.id} id={g.id} aria-labelledby={`${g.id}-h`} className="grid scroll-mt-20 gap-3">
-            <h2 id={`${g.id}-h`} className="text-heading-md font-semibold">
+            <h2 id={`${g.id}-h`} className="flex items-center gap-2 text-heading-md font-semibold">
               {g.title}
+              <span className="text-body-md font-normal text-ink-subtle tabular">{g.items.length}</span>
             </h2>
             {g.items.length > 0 ? (
               g.items.map((b) => (

@@ -1,9 +1,10 @@
-import { ArrowLeft, MapPin, MessageSquareText, UserRound } from "lucide-react";
+import { Car, MapPin, MessageSquareText, UserRound } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Avatar } from "@/components/shared/avatar";
+import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState } from "@/components/shared/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardIcon, CardTitle } from "@/components/ui/card";
 import { SessionConsole } from "@/features/sessions/session-console";
 import { SessionSummaryForm } from "@/features/sessions/session-summary-form";
 import { categoryLabel } from "@/lib/booking/categories";
@@ -31,26 +32,17 @@ export default async function TrainerSessionPage({ params }: { params: Promise<{
   const s = b.sessionRecord;
   const startAllowed = startWindow(b.startAt);
   const now = new Date();
+  const trip = b.status === "CONFIRMED" && b.startAt > now ? b.trip : null;
 
   return (
     <div className="grid gap-6">
-      <Link
-        href="/trainer/sessions"
-        className="inline-flex items-center gap-1 text-sm font-semibold text-ink-muted hover:text-ink"
-      >
-        <ArrowLeft className="size-4" aria-hidden /> My sessions
-      </Link>
-      <header>
-        <p className="mb-1 text-eyebrow font-semibold tracking-[0.08em] text-ink-muted uppercase tabular">
-          {b.reference}
-        </p>
-        <h1 className="text-heading-lg font-semibold tracking-tight">
-          {categoryLabel(b.workoutCategory)} with {b.customer.user.name}
-        </h1>
-        <p className="mt-1 text-ink-muted">
-          {formatSlot(b.startAt, tz)} – {formatTime(b.endAt, tz)} IST · {b.mode === "INSTANT" ? "Instant" : "Scheduled"}
-        </p>
-      </header>
+      <PageHeader
+        back={{ href: "/trainer/sessions", label: "My sessions" }}
+        eyebrow={<span className="tabular">{b.reference}</span>}
+        title={`${categoryLabel(b.workoutCategory)} with ${b.customer.user.name}`}
+        description={`${formatSlot(b.startAt, tz)} – ${formatTime(b.endAt, tz)} IST · ${b.mode === "INSTANT" ? "Instant" : "Scheduled"}`}
+        className="pb-0"
+      />
 
       <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
         <SessionConsole
@@ -74,10 +66,11 @@ export default async function TrainerSessionPage({ params }: { params: Promise<{
         <Card className="self-start">
           <CardHeader>
             <CardTitle>Customer</CardTitle>
+            <CardIcon icon={UserRound} />
           </CardHeader>
           <CardContent className="grid gap-3 text-body-md">
-            <p className="flex items-center gap-2">
-              <UserRound className="size-4 text-ink-subtle" aria-hidden />
+            <p className="flex items-center gap-3">
+              <Avatar name={b.customer.user.name} />
               <span className="font-semibold">{b.customer.user.name}</span>
             </p>
             <p className="flex items-center gap-2 text-ink-muted">
@@ -85,6 +78,18 @@ export default async function TrainerSessionPage({ params }: { params: Promise<{
               {b.serviceZone.name}
               {b.customer.addressLine ? `, ${b.customer.addressLine}` : ""}
             </p>
+            {trip ? (
+              <p className="flex gap-2 rounded-md bg-info-soft px-3 py-2 text-body-sm text-info">
+                <Car className="mt-0.5 size-4 shrink-0" aria-hidden />
+                <span>
+                  <span className="font-semibold">
+                    Set out by {formatTime(new Date(trip.departAt), tz)}
+                  </span>{" "}
+                  · {trip.roadKm.toFixed(1)} km from your base, about {trip.travelMinutes} min. The customer sees this
+                  estimate (simulated location).
+                </span>
+              </p>
+            ) : null}
             {b.customer.fitnessGoals.length > 0 || b.customer.fitnessLevel ? (
               <div className="rounded-md bg-sunken px-3 py-2 text-body-sm">
                 <p className="font-semibold">Customer context</p>

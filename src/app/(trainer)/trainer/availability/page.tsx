@@ -47,8 +47,21 @@ export default async function AvailabilityPage() {
       <AvailabilityForm days={days.map((d) => ({ key: d.key, label: formatDay(d.start, tz) }))} />
       <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {days.map((d) => (
-          <li key={d.key} className="rounded-lg border border-hairline bg-raised p-4">
-            <p className="font-semibold">{formatDay(d.start, tz)}</p>
+          <li
+            key={d.key}
+            className={cn(
+              "rounded-lg border bg-raised p-4 shadow-(--shadow-1)",
+              d.key === todayKey ? "border-brand/40 ring-1 ring-brand/20" : "border-hairline",
+            )}
+          >
+            <p className="flex items-center justify-between gap-2 font-semibold">
+              {formatDay(d.start, tz)}
+              {d.key === todayKey ? (
+                <span className="rounded-full bg-brand px-2 py-0.5 text-[11px] font-semibold text-on-brand">
+                  Today
+                </span>
+              ) : null}
+            </p>
             <ul className="mt-3 grid gap-2">
               {d.intervals.length === 0 ? (
                 <li className="text-body-sm text-ink-muted">

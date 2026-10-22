@@ -6,7 +6,13 @@ import { cancellationBlocker } from "@/lib/booking/cancellation";
 import { categoryLabel } from "@/lib/booking/categories";
 import { INELIGIBLE_MESSAGE, ineligibility, rankTrainers } from "@/lib/booking/matching";
 import { quoteSession, type PriceQuote } from "@/lib/booking/pricing";
-import { ACTIVE_BOOKING_STATUSES, CANCELLABLE_STATUSES } from "@/lib/booking/rules";
+import {
+  ACTIVE_BOOKING_STATUSES,
+  CANCELLABLE_STATUSES,
+  INSTANT_CONFIRM_MIN_LEAD_MINUTES,
+  INSTANT_MIN_LEAD_MINUTES,
+} from "@/lib/booking/rules";
+import { addMinutes } from "@/lib/booking/time";
 import {
   REDEMPTION_MESSAGE,
   cancellationRestoresSession,
@@ -24,6 +30,7 @@ import {
   recordRedemption,
   restoreRedemption,
 } from "@/server/packages/package-service";
+import { withTrip } from "@/server/location/trip";
 import { runSimulatedPayment } from "@/server/payments/simulated-provider";
 import {
   dayRange,
@@ -344,6 +351,7 @@ export async function createBooking(
       category: input.workoutCategory,
       from,
       to,
+      destination: customer.location,
     }),
     loadCustomerBookings(deps.db, customer.userId, from, to),
   ]);
@@ -372,7 +380,14 @@ export async function createBooking(
     });
   }
 
-  const criteria = { category: input.workoutCategory, startAt, timeZone: tz };
+  // Reach is judged as if the trainer set out when the offer was made: an instant start is accepted
+  // down to INSTANT_CONFIRM_MIN_LEAD_MINUTES for time spent reviewing, and travel gets the same
+  // allowance, so a review screen left open a few minutes doesn't turn a valid offer into a refusal.
+  const departFrom =
+    input.mode === "INSTANT"
+      ? addMinutes(now, -(INSTANT_MIN_LEAD_MINUTES - INSTANT_CONFIRM_MIN_LEAD_MINUTES))
+      : now;
+  const criteria = { category: input.workoutCategory, startAt, timeZone: tz, departFrom };
   let order: { trainerId: string; name: string }[];
   if (input.preferredTrainerId) {
     const chosen = pool.candidates.find((c) => c.trainerId === input.preferredTrainerId);
@@ -464,7 +479,7 @@ function ownershipFilter(actor: Actor): { customerId?: string; trainerId?: strin
 export async function getBookingForActor(deps: BookingDeps, actor: Actor, bookingId: string) {
   const scope = ownershipFilter(actor);
   if (!scope || typeof bookingId !== "string" || bookingId.length > 40) return null;
-  return deps.db.booking.findFirst({
+  const row = await deps.db.booking.findFirst({
     where: { id: bookingId, ...scope },
     include: {
       trainer: {
@@ -472,11 +487,13 @@ export async function getBookingForActor(deps: BookingDeps, actor: Actor, bookin
           userId: true,
           specializations: true,
           experienceYears: true,
+          baseLatitude: true,
+          baseLongitude: true,
           user: { select: { name: true } },
         },
       },
       customer: { select: { addressLine: true, user: { select: { name: true } } } },
-      serviceZone: { select: { name: true, timezone: true } },
+      serviceZone: { select: { name: true, timezone: true, latitude: true, longitude: true } },
       pricingRule: { select: { name: true, kind: true } },
       cancelledBy: { select: { id: true, name: true, role: true } },
       package: { select: { id: true, name: true, totalSessions: true, usedSessions: true, expiresAt: true } },
@@ -509,6 +526,8 @@ export async function getBookingForActor(deps: BookingDeps, actor: Actor, bookin
       },
     },
   });
+  // The trip is derived here so the trainer's coordinates never reach a page.
+  return row ? withTrip(row) : null;
 }
 
 export type CancelledBooking = {

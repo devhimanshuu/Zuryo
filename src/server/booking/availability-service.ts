@@ -10,6 +10,7 @@ import { ineligibility, type TrainerCandidate } from "@/lib/booking/matching";
 import { quoteSession, type ActivePricing } from "@/lib/booking/pricing";
 import { ACTIVE_BOOKING_STATUSES, BOOKING_HORIZON_DAYS } from "@/lib/booking/rules";
 import { addDaysToKey, localDateKey, zonedDayStart } from "@/lib/booking/time";
+import { estimateTravel, toLatLng, type LatLng } from "@/lib/location/travel";
 import type { WorkoutCategory } from "@/lib/validation/enums";
 import type { BookingDeps, DbOrTx } from "./deps";
 import type { SlotSuggestion } from "./errors";
@@ -23,6 +24,8 @@ export type CustomerContext = {
   serviceZoneId: string;
   zoneName: string;
   timeZone: string;
+  /** The community's seeded coordinates: where sessions happen and trainers travel to. */
+  location: LatLng | null;
 };
 
 export async function loadCustomerContext(db: DbOrTx, userId: string): Promise<CustomerContext | null> {
@@ -33,7 +36,7 @@ export async function loadCustomerContext(db: DbOrTx, userId: string): Promise<C
       addressLine: true,
       serviceZoneId: true,
       user: { select: { name: true } },
-      serviceZone: { select: { name: true, timezone: true, isActive: true } },
+      serviceZone: { select: { name: true, timezone: true, isActive: true, latitude: true, longitude: true } },
     },
   });
   if (!p || !p.serviceZone.isActive) return null;
@@ -44,6 +47,7 @@ export async function loadCustomerContext(db: DbOrTx, userId: string): Promise<C
     serviceZoneId: p.serviceZoneId,
     zoneName: p.serviceZone.name,
     timeZone: p.serviceZone.timezone,
+    location: toLatLng(p.serviceZone.latitude, p.serviceZone.longitude),
   };
 }
 
@@ -63,8 +67,9 @@ export type CandidatePool = {
 
 /**
  * Trainers in the customer's community who coach `category`, with their availability windows and
- * active bookings over [from, to). Inactive trainers and suspended users are excluded here and
- * re-checked under lock when a booking is written.
+ * active bookings over [from, to), and the estimated trip from each trainer's base to
+ * `destination`. Inactive trainers and suspended users are excluded here and re-checked under lock
+ * when a booking is written.
  */
 export async function loadCandidatePool(
   db: DbOrTx,
@@ -75,6 +80,8 @@ export async function loadCandidatePool(
     to: Date;
     /** A booking being rescheduled: its current slot must not count against its own move. */
     excludeBookingId?: string;
+    /** Where the session happens (the community); trips are estimated to here. */
+    destination?: LatLng | null;
   },
 ): Promise<CandidatePool> {
   // One round of three parallel queries (not trainers first, then their schedules): every query
@@ -96,6 +103,8 @@ export async function loadCandidatePool(
         experienceYears: true,
         workoutCategories: true,
         isActive: true,
+        baseLatitude: true,
+        baseLongitude: true,
         user: { select: { name: true } },
       },
     }),
@@ -125,11 +134,13 @@ export async function loadCandidatePool(
       experienceYears: t.experienceYears,
       categories: t.workoutCategories,
     });
+    const base = toLatLng(t.baseLatitude, t.baseLongitude);
     return {
       trainerId: t.userId,
       name: t.user.name,
       isActive: t.isActive,
       categories: t.workoutCategories,
+      travel: base && args.destination ? estimateTravel(base, args.destination) : null,
       schedule: {
         windows: windows.filter((w) => w.trainerId === t.userId),
         bookings: bookings.filter((b) => b.trainerId === t.userId),
@@ -227,7 +238,7 @@ function buildDays(
       if (hasActiveOverlap(ctx.customerBookings, startAt, sessionEnd(startAt))) {
         return { ...base, status: "YOU_ARE_BOOKED" };
       }
-      const criteria = { category: ctx.category, startAt, timeZone: tz };
+      const criteria = { category: ctx.category, startAt, timeZone: tz, departFrom: ctx.now };
       const trainerCount = ctx.candidates.filter((c) => ineligibility(c, criteria) === null).length;
       if (trainerCount === 0) return { ...base, status: "UNAVAILABLE" };
       if (ctx.requireTotal && quote.totalAmount !== ctx.requireTotal) {
@@ -256,7 +267,14 @@ export async function getSchedule(
   const to = zonedDayStart(addDaysToKey(todayKey, dayCount), tz);
   const excludeBookingId = reschedule?.excludeBookingId;
   const [pool, customerBookings, pricing] = await Promise.all([
-    loadCandidatePool(deps.db, { serviceZoneId: customer.serviceZoneId, category, from, to, excludeBookingId }),
+    loadCandidatePool(deps.db, {
+      serviceZoneId: customer.serviceZoneId,
+      category,
+      from,
+      to,
+      excludeBookingId,
+      destination: customer.location,
+    }),
     loadCustomerBookings(deps.db, customer.userId, from, to, excludeBookingId),
     loadActivePricing(deps.db, now),
   ]);
@@ -296,7 +314,14 @@ export async function findAlternatives(
   const to = zonedDayStart(addDaysToKey(firstKey, 3), tz);
   const excludeBookingId = reschedule?.excludeBookingId;
   const [pool, customerBookings, pricing] = await Promise.all([
-    loadCandidatePool(deps.db, { serviceZoneId: customer.serviceZoneId, category, from, to, excludeBookingId }),
+    loadCandidatePool(deps.db, {
+      serviceZoneId: customer.serviceZoneId,
+      category,
+      from,
+      to,
+      excludeBookingId,
+      destination: customer.location,
+    }),
     loadCustomerBookings(deps.db, customer.userId, from, to, excludeBookingId),
     loadActivePricing(deps.db, now),
   ]);

@@ -1,9 +1,9 @@
-import { Dumbbell, Sparkles } from "lucide-react";
+import { Dumbbell, Sparkles, Target, TrendingUp, UserRound } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState, ErrorState } from "@/components/shared/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardIcon, CardTitle } from "@/components/ui/card";
 import { FitnessProfileForm } from "@/features/fitness/profile-form";
 import { GenerateRecommendationButton } from "@/features/fitness/generate-button";
 import { RecommendationCard } from "@/features/fitness/recommendation-card";
@@ -80,6 +80,7 @@ export default async function FitnessPage() {
           <Card>
             <CardHeader>
               <CardTitle>Profile</CardTitle>
+              <CardIcon icon={UserRound} />
             </CardHeader>
             <CardContent className="grid gap-3">
               {profile ? (
@@ -124,6 +125,7 @@ export default async function FitnessPage() {
           <Card>
             <CardHeader>
               <CardTitle>Goals</CardTitle>
+              <CardIcon icon={Target} />
             </CardHeader>
             <CardContent>
               {activeGoals.length === 0 ? (
@@ -133,7 +135,7 @@ export default async function FitnessPage() {
                   {activeGoals.map((g) => {
                     const detail = goalDetail.get(g);
                     return (
-                      <li key={g} className="rounded-md bg-sunken px-3 py-2">
+                      <li key={g} className="rounded-md border border-hairline bg-surface px-3 py-2.5">
                         <div className="flex items-center justify-between gap-2">
                           <p className="font-semibold">{GOAL_LABELS[g]}</p>
                           <span
@@ -160,18 +162,21 @@ export default async function FitnessPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Progress</CardTitle>
-              <p className="text-body-sm text-ink-muted">From your completed sessions.</p>
+              <div>
+                <CardTitle>Progress</CardTitle>
+                <p className="text-body-sm text-ink-muted">From your completed sessions.</p>
+              </div>
+              <CardIcon icon={TrendingUp} />
             </CardHeader>
             <CardContent className="grid gap-3">
               <dl className="grid grid-cols-2 gap-3">
-                <div className="rounded-md bg-sunken px-3 py-2.5">
+                <div className="rounded-md border border-hairline bg-surface px-3 py-2.5">
                   <dt className="text-body-sm text-ink-muted">Completed</dt>
-                  <dd className="text-heading-lg font-semibold tabular">{stats.completedCount}</dd>
+                  <dd className="font-display text-display-md leading-tight tabular">{stats.completedCount}</dd>
                 </div>
-                <div className="rounded-md bg-sunken px-3 py-2.5">
+                <div className="rounded-md border border-hairline bg-surface px-3 py-2.5">
                   <dt className="text-body-sm text-ink-muted">Last 30 days</dt>
-                  <dd className="text-heading-lg font-semibold tabular">{stats.completedLast30Days}</dd>
+                  <dd className="font-display text-display-md leading-tight tabular">{stats.completedLast30Days}</dd>
                 </div>
               </dl>
               {stats.categories.length > 0 ? (
@@ -284,7 +289,10 @@ export default async function FitnessPage() {
                   const minutes = actualDurationMinutes(s.startedAt, s.completedAt);
                   return (
                     <li key={s.id} className="relative pb-8 pl-6 last:pb-0">
-                      <span className="absolute top-1.5 -left-[5px] size-2.5 rounded-full bg-brand" aria-hidden />
+                      <span
+                        className="absolute top-1.5 -left-[5px] size-2.5 rounded-full bg-brand ring-4 ring-surface"
+                        aria-hidden
+                      />
                       <p className="text-body-sm text-ink-muted">
                         {formatSlot(s.startedAt)} · with {s.booking.trainer?.user.name ?? "trainer"}
                         {minutes !== null ? ` · ${minutes} min` : ""}

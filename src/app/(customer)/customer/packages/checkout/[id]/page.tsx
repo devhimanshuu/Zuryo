@@ -1,4 +1,4 @@
-import { ArrowLeft, CircleCheck } from "lucide-react";
+import { CircleCheck } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -30,14 +30,9 @@ export default async function PackageCheckoutPage({ params }: { params: Promise<
 
   return (
     <div className="grid max-w-3xl gap-6">
-      <Link
-        href="/customer/packages"
-        className="inline-flex items-center gap-1 text-sm font-semibold text-ink-muted hover:text-ink"
-      >
-        <ArrowLeft className="size-4" aria-hidden /> Packages
-      </Link>
       <PageHeader
         editorial
+        back={{ href: "/customer/packages", label: "Packages" }}
         title={pending ? "Checkout" : "Package paid"}
         description={`${pkg.name} for ${actor.name}. The price was fixed when checkout started.`}
         className="pb-0"
@@ -62,8 +57,8 @@ export default async function PackageCheckoutPage({ params }: { params: Promise<
               Society commission{pkg.commissionPercent ? ` (${Number(pkg.commissionPercent)}%)` : ""}
             </dt>
             <dd className="text-right font-semibold tabular">{formatINR(pkg.commissionAmount ?? "0.00")}</dd>
-            <dt className="border-t border-hairline pt-2 font-semibold">Total to pay</dt>
-            <dd className="border-t border-hairline pt-2 text-right text-heading-md font-semibold tabular">
+            <dt className="mt-1 border-t border-hairline pt-3 font-semibold">Total to pay</dt>
+            <dd className="mt-1 border-t border-hairline pt-3 text-right text-numeric-lg font-semibold tracking-tight tabular">
               {formatINR(pkg.pricePaid)}
             </dd>
           </dl>

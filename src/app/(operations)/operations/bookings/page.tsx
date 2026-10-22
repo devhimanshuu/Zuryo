@@ -20,7 +20,7 @@ export default async function OperationsBookingsPage() {
       <PageHeader title="Bookings" description={`${rows.length} bookings, newest start time first.`} />
 
       {/* Desktop: table. Under 768px the same data renders as stacked cards. */}
-      <div className="hidden overflow-hidden rounded-lg border border-hairline bg-raised md:block">
+      <div className="hidden overflow-hidden rounded-lg border border-hairline bg-raised shadow-(--shadow-1) md:block">
         <table className="w-full text-left text-body-md">
           <caption className="sr-only">All bookings</caption>
           <thead className="border-b border-hairline bg-sunken/60 text-eyebrow font-semibold tracking-[0.08em] text-ink-muted uppercase">
@@ -53,8 +53,8 @@ export default async function OperationsBookingsPage() {
           </thead>
           <tbody className="divide-y divide-hairline">
             {rows.map((b) => (
-              <tr key={b.id} className="hover:bg-sunken/40">
-                <td className="px-4 py-3 font-semibold tabular">{b.reference}</td>
+              <tr key={b.id} className="transition-colors hover:bg-sunken/40">
+                <td className="px-4 py-3 font-semibold whitespace-nowrap tabular">{b.reference}</td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   {formatSlot(b.startAt)}
                   <span className="block text-body-sm text-ink-subtle">
@@ -80,7 +80,7 @@ export default async function OperationsBookingsPage() {
 
       <ul className="grid gap-3 md:hidden">
         {rows.map((b) => (
-          <li key={b.id} className="rounded-lg border border-hairline bg-raised p-4">
+          <li key={b.id} className="rounded-lg border border-hairline bg-raised p-4 shadow-(--shadow-1)">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-semibold tabular">{b.reference}</p>

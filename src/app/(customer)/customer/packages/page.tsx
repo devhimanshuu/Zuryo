@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarPlus, FlaskConical } from "lucide-react";
+import { ArrowRight, CalendarPlus, FlaskConical, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
@@ -9,6 +9,7 @@ import { PackageMeter } from "@/features/customers/package-meter";
 import { ChoosePlanButton } from "@/features/packages/choose-plan-button";
 import { PackageStatusBadge } from "@/features/packages/package-status-badge";
 import { getDb } from "@/lib/db";
+import { cn } from "@/lib/utils/cn";
 import { formatINR } from "@/lib/pricing";
 import { safely } from "@/lib/utils/errors";
 import { formatDay, formatSlot } from "@/lib/utils/format";
@@ -29,6 +30,13 @@ export default async function PackagesPage({ searchParams }: { searchParams: Pro
   const { owned, catalogue } = result.data;
   const { purchased } = await searchParams;
   const justBought = purchased ? owned.find((p) => p.id === purchased && p.status !== "PENDING_PAYMENT") : null;
+  // "Best value" is the lowest price per session among plans that actually save money; no claim otherwise.
+  const bestValueId =
+    catalogue.plans.length > 1
+      ? catalogue.plans
+          .filter((p) => p.quote.savings)
+          .sort((a, b) => Number(a.quote.perSessionBase) - Number(b.quote.perSessionBase))[0]?.id
+      : undefined;
 
   return (
     <div className="grid gap-10">
@@ -145,11 +153,21 @@ export default async function PackagesPage({ searchParams }: { searchParams: Pro
         {catalogue.plans.length === 0 ? (
           <EmptyState title="No packages on sale" body="Operations hasn't published any packages yet." />
         ) : (
-          <ul className="grid gap-4 md:grid-cols-3">
+          <ul className="grid gap-4 pt-2 md:grid-cols-3">
             {catalogue.plans.map((plan) => (
-              <li key={plan.id}>
-                <Card className="flex h-full flex-col">
-                  <CardHeader>
+              <li key={plan.id} className="relative">
+                {plan.id === bestValueId ? (
+                  <span className="absolute -top-3 left-5 z-10 inline-flex items-center gap-1 rounded-full bg-brand px-2.5 py-1 text-xs font-semibold text-on-brand shadow-(--shadow-2)">
+                    <Sparkles className="size-3.5" aria-hidden /> Best value
+                  </span>
+                ) : null}
+                <Card
+                  className={cn(
+                    "flex h-full flex-col transition-shadow duration-200 hover:shadow-(--shadow-2)",
+                    plan.id === bestValueId && "border-brand/50 shadow-(--shadow-2) ring-1 ring-brand/40",
+                  )}
+                >
+                  <CardHeader className={plan.id === bestValueId ? "pt-6" : undefined}>
                     <div>
                       <CardTitle>{plan.name}</CardTitle>
                       <p className="text-body-sm text-ink-muted">
@@ -159,8 +177,11 @@ export default async function PackagesPage({ searchParams }: { searchParams: Pro
                   </CardHeader>
                   <CardContent className="grid flex-1 content-start gap-3">
                     {plan.description ? <p className="text-body-sm text-ink-muted">{plan.description}</p> : null}
-                    <p className="text-numeric-lg font-semibold tracking-tight tabular">
-                      {formatINR(plan.quote.totalAmount)}
+                    <p className="flex items-baseline gap-2">
+                      <span className="text-numeric-lg font-semibold tracking-tight tabular">
+                        {formatINR(plan.quote.totalAmount)}
+                      </span>
+                      <span className="text-body-sm text-ink-muted">total</span>
                     </p>
                     <dl className="grid grid-cols-[1fr_auto] gap-y-1 text-body-sm">
                       <dt className="text-ink-muted">Package price</dt>

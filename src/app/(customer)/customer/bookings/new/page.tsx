@@ -1,6 +1,4 @@
-import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState } from "@/components/shared/states";
 import { BookingWizard } from "@/features/bookings/wizard/booking-wizard";
@@ -44,14 +42,9 @@ export default async function NewBookingPage({
 
   return (
     <div>
-      <Link
-        href="/customer/bookings"
-        className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-ink-muted hover:text-ink"
-      >
-        <ArrowLeft className="size-4" aria-hidden /> My bookings
-      </Link>
       <PageHeader
         editorial
+        back={{ href: "/customer/bookings", label: "My bookings" }}
         title="Book a session"
         description={`60 minutes with a trainer at ${customer.zoneName}. Booking as ${customer.name}.`}
       />

@@ -1,14 +1,17 @@
-import { ArrowLeft, CalendarPlus } from "lucide-react";
+import { CalendarDays, CalendarPlus, Dumbbell, Navigation, ReceiptText, Settings2, Timer } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState, Notice } from "@/components/shared/states";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardIcon, CardTitle } from "@/components/ui/card";
 import { CancelBookingButton } from "@/features/bookings/cancel-booking-button";
 import { RescheduleBookingButton } from "@/features/bookings/reschedule-booking-button";
 import { PriceBreakdown } from "@/features/bookings/price-breakdown";
+import { TrainerArrival } from "@/features/location/trainer-arrival";
+import { LiveSessionStatus } from "@/features/sessions/live-session-status";
 import { SessionFeedbackForm } from "@/features/sessions/session-feedback-form";
 import { CANCELLATION_POLICY_NOTE, cancellationBlocker } from "@/lib/booking/cancellation";
 import { categoryLabel } from "@/lib/booking/categories";
@@ -48,6 +51,7 @@ export default async function BookingDetailPage({
   const blocker = cancellationBlocker(b, now);
   const moveBlocker = rescheduleBlocker(b, now);
   const coverage = coverageSummary(b);
+  const trip = b.status === "CONFIRMED" && b.startAt > now ? b.trip : null;
   const payment = b.payments[0];
   const trainerName = b.trainer?.user.name ?? null;
   const cancelledBy =
@@ -61,12 +65,15 @@ export default async function BookingDetailPage({
 
   return (
     <div className="grid gap-6">
-      <Link
-        href="/customer/bookings"
-        className="inline-flex items-center gap-1 text-sm font-semibold text-ink-muted hover:text-ink"
-      >
-        <ArrowLeft className="size-4" aria-hidden /> My bookings
-      </Link>
+      <PageHeader
+        editorial
+        back={{ href: "/customer/bookings", label: "My bookings" }}
+        eyebrow={<span className="tabular">{b.reference}</span>}
+        title={`${categoryLabel(b.workoutCategory)}${trainerName ? ` with ${trainerName.split(" ")[0]}` : ""}`}
+        description={`${formatSlot(b.startAt, tz)} IST`}
+        actions={<StatusBadge status={b.status} rescheduled={b.rescheduleCount > 0} />}
+        className="pb-0"
+      />
 
       {created === "1" && b.status === "CONFIRMED" ? (
         <Notice tone="success" title="You're booked" live>
@@ -75,24 +82,27 @@ export default async function BookingDetailPage({
         </Notice>
       ) : null}
 
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0">
-          <p className="mb-1 text-eyebrow font-semibold tracking-[0.08em] text-ink-muted uppercase tabular">
-            {b.reference}
-          </p>
-          <h1 className="font-display text-display-md">
-            {categoryLabel(b.workoutCategory)}
-            {trainerName ? ` with ${trainerName.split(" ")[0]}` : ""}
-          </h1>
-          <p className="mt-1 text-ink-muted">{formatSlot(b.startAt, tz)} IST</p>
-        </div>
-        <StatusBadge status={b.status} rescheduled={b.rescheduleCount > 0} />
-      </header>
+      {b.status === "IN_PROGRESS" && b.sessionRecord && !b.sessionRecord.completedAt ? (
+        <section
+          aria-label="Live session"
+          className="relative isolate overflow-hidden rounded-lg bg-inverse p-5 text-ink-inverse shadow-(--shadow-3) sm:p-6"
+        >
+          <div aria-hidden className="absolute -top-20 -right-10 -z-10 size-64 rounded-full bg-accent/25 blur-3xl" />
+          <LiveSessionStatus
+            inverse
+            startedAt={b.sessionRecord.startedAt.toISOString()}
+            endsAt={b.sessionRecord.endsAt.toISOString()}
+            serverNow={now.toISOString()}
+            tz={tz}
+          />
+        </section>
+      ) : null}
 
       <div className="grid gap-5 lg:grid-cols-[1.3fr_1fr]">
         <Card>
           <CardHeader>
             <CardTitle>Session</CardTitle>
+            <CardIcon icon={CalendarDays} />
           </CardHeader>
           <CardContent>
             <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-[auto_1fr]">
@@ -132,9 +142,27 @@ export default async function BookingDetailPage({
         </Card>
 
         <div className="grid content-start gap-5">
+          {trip && trainerName ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Trainer arrival</CardTitle>
+                <CardIcon icon={Navigation} />
+              </CardHeader>
+              <CardContent>
+                <TrainerArrival
+                  trip={trip}
+                  trainerName={trainerName}
+                  zoneName={b.serviceZone.name}
+                  serverNow={now.toISOString()}
+                  tz={tz}
+                />
+              </CardContent>
+            </Card>
+          ) : null}
           <Card>
             <CardHeader>
               <CardTitle>Price</CardTitle>
+              <CardIcon icon={ReceiptText} />
             </CardHeader>
             <CardContent className="grid gap-3">
               <PriceBreakdown price={b} />
@@ -168,7 +196,8 @@ export default async function BookingDetailPage({
           {b.sessionRecord ? (
             <Card>
               <CardHeader>
-                <CardTitle>Session</CardTitle>
+                <CardTitle>Session timeline</CardTitle>
+                <CardIcon icon={Timer} />
               </CardHeader>
               <CardContent>
                 <ol className="grid gap-2 text-body-sm">
@@ -205,6 +234,7 @@ export default async function BookingDetailPage({
           <Card>
             <CardHeader>
               <CardTitle>Manage</CardTitle>
+              <CardIcon icon={Settings2} />
             </CardHeader>
             <CardContent className="grid gap-3">
               {blocker ? (
@@ -283,6 +313,7 @@ function SessionSummary({
     <Card>
       <CardHeader>
         <CardTitle>What you did</CardTitle>
+        <CardIcon icon={Dumbbell} />
       </CardHeader>
       <CardContent className="grid gap-3 text-body-sm">
         {minutes !== null ? <p className="text-ink-muted">Duration: {minutes} minutes</p> : null}

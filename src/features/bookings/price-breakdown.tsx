@@ -33,7 +33,7 @@ export function PriceBreakdown({ price, className }: { price: PriceLines; classN
       ) : null}
       <dt className="text-ink-muted">Society commission ({Number(price.commissionPercent.toString())}%)</dt>
       <dd className="text-right font-semibold tabular">{formatINR(price.commissionAmount)}</dd>
-      <dt className="border-t border-hairline pt-2 font-semibold">Total</dt>
+      <dt className="border-t border-hairline pt-2 font-semibold">Total payable</dt>
       <dd className="border-t border-hairline pt-2 text-right text-heading-md font-semibold tabular">
         {formatINR(price.totalAmount)}
       </dd>

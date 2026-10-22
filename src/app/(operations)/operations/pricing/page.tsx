@@ -52,7 +52,7 @@ export default async function PricingPage() {
           Every saved change is a new rule. Bookings point at the version that priced them, which is why the counts
           below never move when prices change.
         </p>
-        <div className="overflow-x-auto rounded-lg border border-hairline bg-raised">
+        <div className="overflow-x-auto rounded-lg border border-hairline bg-raised shadow-(--shadow-1)">
           <table className="w-full min-w-[640px] text-left text-body-md">
             <caption className="sr-only">Pricing rule versions</caption>
             <thead className="border-b border-hairline bg-sunken/60 text-eyebrow font-semibold tracking-[0.08em] text-ink-muted uppercase">

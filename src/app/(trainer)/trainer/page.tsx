@@ -1,10 +1,10 @@
-import { ArrowRight, Bell, CalendarDays } from "lucide-react";
+import { ArrowRight, Bell, CalendarClock, CalendarDays, CalendarRange, Clock } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState, EmptyState } from "@/components/shared/states";
 import { Metric } from "@/components/shared/metric";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardIcon, CardLink, CardTitle } from "@/components/ui/card";
 import { ScheduleRow } from "@/features/bookings/schedule-row";
 import { categoryLabel } from "@/lib/booking/categories";
 import { safely } from "@/lib/utils/errors";
@@ -44,37 +44,47 @@ export default async function TrainerOverviewPage() {
       {live ? (
         <Link
           href={`/trainer/sessions/${live.id}`}
-          className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-inverse px-5 py-4 text-ink-inverse hover:opacity-95"
+          className="group relative isolate flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-lg bg-inverse px-5 py-5 text-ink-inverse shadow-(--shadow-3) sm:px-6"
         >
-          <span>
-            <span className="block text-eyebrow font-semibold tracking-[0.08em] text-ink-inverse/70 uppercase">
-              Session in progress
+          <span aria-hidden className="absolute -top-16 -right-10 -z-10 size-56 rounded-full bg-accent/30 blur-3xl" />
+          <span className="flex items-center gap-4">
+            <span className="relative flex size-3" aria-hidden>
+              <span className="absolute inset-0 animate-ping rounded-full bg-accent opacity-60" />
+              <span className="relative size-3 rounded-full bg-accent" />
             </span>
-            <span className="block font-semibold">
-              {live.customer.user.name} · {categoryLabel(live.workoutCategory)}
+            <span>
+              <span className="block text-eyebrow font-semibold tracking-[0.08em] text-ink-inverse/70 uppercase">
+                Session in progress
+              </span>
+              <span className="block text-heading-md font-semibold">
+                {live.customer.user.name} · {categoryLabel(live.workoutCategory)}
+              </span>
             </span>
           </span>
-          <span className="inline-flex items-center gap-1 text-sm font-semibold">
-            Open live session <ArrowRight className="size-4" aria-hidden />
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-ink-inverse px-3 py-2 text-sm font-semibold text-ink">
+            Open live session{" "}
+            <ArrowRight className="size-4 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden />
           </span>
         </Link>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <Metric label="Sessions today" value={today.length} />
+        <Metric label="Sessions today" value={today.length} icon={CalendarDays} />
         <Metric
           label="Next session"
           value={next ? formatTime(next.startAt) : "—"}
           foot={next ? next.customer.user.name : "Nothing scheduled"}
+          icon={Clock}
+          tone="accent"
         />
-        <Metric label="Upcoming (later)" value={upcoming.length} foot="Confirmed or pending" />
+        <Metric label="Upcoming (later)" value={upcoming.length} foot="Confirmed or pending" icon={CalendarRange} />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
         <Card>
           <CardHeader>
             <CardTitle>Today&apos;s schedule</CardTitle>
-            <CalendarDays className="size-5 text-ink-subtle" aria-hidden />
+            <CardIcon icon={CalendarDays} />
           </CardHeader>
           <CardContent className="px-0 pb-2">
             {today.length > 0 ? (
@@ -82,6 +92,7 @@ export default async function TrainerOverviewPage() {
                 {today.map((b) => (
                   <ScheduleRow
                     key={b.id}
+                    href={`/trainer/sessions/${b.id}`}
                     startAt={b.startAt}
                     status={b.status}
                     title={`${b.customer.user.name} · ${categoryLabel(b.workoutCategory)}`}
@@ -100,7 +111,7 @@ export default async function TrainerOverviewPage() {
         <Card>
           <CardHeader>
             <CardTitle>Booking updates</CardTitle>
-            <Bell className="size-5 text-ink-subtle" aria-hidden />
+            <CardIcon icon={Bell} />
           </CardHeader>
           <CardContent className="px-0 pb-2">
             {notifications.length > 0 ? (
@@ -129,6 +140,9 @@ export default async function TrainerOverviewPage() {
             ) : (
               <p className="px-5 pb-3 text-ink-muted">No updates.</p>
             )}
+            <div className="border-t border-hairline px-5 pt-3 pb-1">
+              <CardLink href="/trainer/notifications">All updates</CardLink>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -137,12 +151,14 @@ export default async function TrainerOverviewPage() {
         <Card>
           <CardHeader>
             <CardTitle>Coming up</CardTitle>
+            <CardIcon icon={CalendarClock} />
           </CardHeader>
           <CardContent className="px-0 pb-2">
             <ul className="divide-y divide-hairline">
               {upcoming.map((b) => (
                 <ScheduleRow
                   key={b.id}
+                  href={`/trainer/sessions/${b.id}`}
                   showDay
                   startAt={b.startAt}
                   status={b.status}
