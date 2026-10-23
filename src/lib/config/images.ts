@@ -10,10 +10,11 @@ const unsplash = (id: string, w = 1600) =>
 
 export const IMAGES = {
   hero: {
-    src: unsplash("photo-1571019613454-1cb2f99b2d8b"),
-    alt: "A trainer guiding a client through a strength exercise",
-    credit: "Unsplash",
-    position: "center 35%",
+    // Vitaly Gariev, Unsplash: a trainer coaching a client through a barbell lift in a bright studio.
+    src: unsplash("photo-1758875569256-f37c438cac65", 2000),
+    alt: "A personal trainer watching a client perform a barbell deadlift in a bright studio",
+    credit: "Vitaly Gariev / Unsplash",
+    position: "55% 40%",
   },
   community: {
     src: unsplash("photo-1544367567-0f2fcb009e0b", 1200),

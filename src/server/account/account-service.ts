@@ -2,6 +2,7 @@ import "server-only";
 import { compare, hash } from "bcryptjs";
 import type { Db } from "@/lib/db";
 import type { Role, WorkoutCategory } from "@/lib/validation/enums";
+import { ACTIVE_BOOKING_STATUSES } from "@/lib/booking/rules";
 import { FRESH_AUTH_WINDOW_MS, passwordChangeSchema, profileSchema } from "@/lib/validation/account";
 import { fail, ok, type ServiceResult } from "@/server/booking/errors";
 import type { Actor } from "@/server/auth/actor";
@@ -15,11 +16,15 @@ export type AccountView = {
   createdAt: Date;
   /** Whether a password sign-in exists. Never the hash itself. */
   hasPassword: boolean;
-  zone: { name: string; city: string } | null;
+  zone: { id: string; name: string; city: string } | null;
+  /** Customers: tower / block and flat. */
+  addressLine: string | null;
   trainer: {
     bio: string | null;
     experienceYears: number | null;
     workoutCategories: WorkoutCategory[];
+    specializations: string[];
+    acceptingBookings: boolean;
   } | null;
 };
 
@@ -34,13 +39,17 @@ export async function getAccount(db: Db, userId: string): Promise<AccountView | 
       role: true,
       createdAt: true,
       passwordHash: true,
-      customerProfile: { select: { serviceZone: { select: { name: true, city: true } } } },
+      customerProfile: {
+        select: { addressLine: true, serviceZone: { select: { id: true, name: true, city: true } } },
+      },
       trainerProfile: {
         select: {
           bio: true,
           experienceYears: true,
           workoutCategories: true,
-          serviceZone: { select: { name: true, city: true } },
+          specializations: true,
+          isActive: true,
+          serviceZone: { select: { id: true, name: true, city: true } },
         },
       },
     },
@@ -55,11 +64,14 @@ export async function getAccount(db: Db, userId: string): Promise<AccountView | 
     createdAt: user.createdAt,
     hasPassword: user.passwordHash !== null,
     zone: user.customerProfile?.serviceZone ?? user.trainerProfile?.serviceZone ?? null,
+    addressLine: user.customerProfile?.addressLine ?? null,
     trainer: user.trainerProfile
       ? {
           bio: user.trainerProfile.bio,
           experienceYears: user.trainerProfile.experienceYears,
           workoutCategories: user.trainerProfile.workoutCategories,
+          specializations: user.trainerProfile.specializations,
+          acceptingBookings: user.trainerProfile.isActive,
         }
       : null,
   };
@@ -81,11 +93,61 @@ export async function updateProfile(
   // The role in the payload only selects the schema; it must match who is acting.
   if (data.role !== actor.role) return fail("FORBIDDEN", "That doesn't match your account type.");
 
+  // Moving community is refused while sessions are booked: they were matched to people and places
+  // in the old one, and silently re-homing them would break those bookings.
+  if (data.role !== "OPERATIONS" && data.serviceZoneId) {
+    const current =
+      data.role === "CUSTOMER"
+        ? await db.customerProfile.findUnique({
+            where: { userId: actor.userId },
+            select: { serviceZoneId: true },
+          })
+        : await db.trainerProfile.findUnique({
+            where: { userId: actor.userId },
+            select: { serviceZoneId: true },
+          });
+    if (current && current.serviceZoneId !== data.serviceZoneId) {
+      const zone = await db.serviceZone.findFirst({
+        where: { id: data.serviceZoneId, isActive: true },
+        select: { id: true },
+      });
+      if (!zone) {
+        return fail("VALIDATION", "That community isn't available.", {
+          fieldErrors: { serviceZoneId: ["Choose a community from the list"] },
+        });
+      }
+      const open = await db.booking.count({
+        where: {
+          ...(data.role === "CUSTOMER" ? { customerId: actor.userId } : { trainerId: actor.userId }),
+          status: { in: [...ACTIVE_BOOKING_STATUSES] },
+          endAt: { gte: new Date() },
+        },
+      });
+      if (open > 0) {
+        return fail(
+          "CONFLICT",
+          "You have upcoming sessions, so your community can't change yet. Finish or cancel them first.",
+          { fieldErrors: { serviceZoneId: ["Not while you have upcoming sessions"] } },
+        );
+      }
+    }
+  }
+
   await db.user.update({
     where: { id: actor.userId },
     data: {
       name: data.name,
       phone: data.phone ?? null,
+      ...(data.role === "CUSTOMER"
+        ? {
+            customerProfile: {
+              update: {
+                addressLine: data.addressLine ?? null,
+                ...(data.serviceZoneId ? { serviceZoneId: data.serviceZoneId } : {}),
+              },
+            },
+          }
+        : {}),
       ...(data.role === "TRAINER"
         ? {
             trainerProfile: {
@@ -93,6 +155,9 @@ export async function updateProfile(
                 bio: data.bio ?? null,
                 experienceYears: data.experienceYears ?? null,
                 workoutCategories: data.workoutCategories,
+                ...(data.specializations ? { specializations: data.specializations } : {}),
+                ...(data.acceptingBookings === undefined ? {} : { isActive: data.acceptingBookings }),
+                ...(data.serviceZoneId ? { serviceZoneId: data.serviceZoneId } : {}),
               },
             },
           }

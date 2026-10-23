@@ -26,9 +26,7 @@ function apply(choice: ThemeChoice) {
   const root = document.documentElement;
   root.classList.toggle("dark", dark);
   root.style.colorScheme = dark ? "dark" : "light";
-  document
-    .querySelector('meta[name="theme-color"]')
-    ?.setAttribute("content", dark ? "#101814" : "#f6f4ef");
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#101814" : "#f6f4ef");
 }
 
 /** Three-way theme control: follow the system by default, or pin light/dark. */
@@ -84,7 +82,7 @@ export function ThemeControl() {
           aria-pressed={choice === value}
           title={label}
           className={cn(
-            "grid size-7 place-items-center rounded-sm text-ink-muted transition-colors hover:text-ink",
+            "grid size-9 place-items-center rounded-sm text-ink-muted transition-colors hover:text-ink sm:size-7",
             choice === value && "bg-raised text-ink shadow-(--shadow-1)",
           )}
         >

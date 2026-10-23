@@ -215,6 +215,18 @@
   html {
     -webkit-text-size-adjust: 100%;
   }
+  /*
+   * A bare `grid` has one auto-sized column, which grows to its widest child's minimum width and can
+   * push the whole page sideways on a phone. Make that single column shrinkable. Explicit column
+   * utilities (grid-cols-*) live in a later layer and still win.
+   */
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* A fieldset's default min-width is its content's width, which also breaks narrow screens. */
+  fieldset {
+    min-width: 0;
+  }
   body {
     @apply bg-surface font-sans text-body-md text-ink antialiased;
   }

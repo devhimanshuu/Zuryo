@@ -16,6 +16,7 @@ export function ReconcileButton() {
       variant="secondary"
       size="sm"
       loading={pending}
+      className="h-auto min-h-9 max-w-full shrink py-1.5 text-left whitespace-normal"
       onClick={() =>
         startTransition(async () => {
           try {

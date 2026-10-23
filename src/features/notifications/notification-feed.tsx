@@ -124,7 +124,8 @@ function NotificationItem({
         style={{ transform: offset ? `translateX(${offset}px)` : undefined }}
         className={cn(
           "relative flex touch-pan-y gap-3.5 px-4 py-4 sm:px-5",
-          item.unread && "bg-brand-soft/30 before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-brand",
+          item.unread &&
+            "bg-brand-soft/30 before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-brand",
           !dragging && "transition-transform duration-200 ease-(--ease-standard)",
         )}
       >
@@ -150,7 +151,7 @@ function NotificationItem({
                 disabled={disabled}
                 aria-label={`Mark “${item.title}” as read`}
                 title="Mark as read"
-                className="-mt-1 grid size-7 shrink-0 place-items-center rounded-md text-ink-subtle transition-colors hover:bg-sunken hover:text-ink disabled:opacity-45"
+                className="-mt-1 grid size-9 shrink-0 place-items-center rounded-md text-ink-subtle transition-colors hover:bg-sunken hover:text-ink disabled:opacity-45 sm:size-7"
               >
                 <Check className="size-4" aria-hidden />
               </button>
@@ -205,12 +206,10 @@ export function NotificationFeed({
   const router = useRouter();
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [pending, startTransition] = useTransition();
-  const [optimisticItems, applyOptimistic] = useOptimistic(
-    items,
-    (state, action: OptimisticAction) =>
-      action.type === "all"
-        ? state.map((item) => ({ ...item, unread: false }))
-        : state.map((item) => (item.id === action.id ? { ...item, unread: false } : item)),
+  const [optimisticItems, applyOptimistic] = useOptimistic(items, (state, action: OptimisticAction) =>
+    action.type === "all"
+      ? state.map((item) => ({ ...item, unread: false }))
+      : state.map((item) => (item.id === action.id ? { ...item, unread: false } : item)),
   );
   const unread = optimisticItems.filter((item) => item.unread);
   const read = optimisticItems.filter((item) => !item.unread);
@@ -272,7 +271,9 @@ export function NotificationFeed({
               aria-pressed={filter === option.value}
               className={cn(
                 "inline-flex h-8 items-center gap-1.5 rounded-sm px-3 text-body-sm font-semibold transition-colors",
-                filter === option.value ? "bg-surface text-ink shadow-(--shadow-1)" : "text-ink-muted hover:text-ink",
+                filter === option.value
+                  ? "bg-surface text-ink shadow-(--shadow-1)"
+                  : "text-ink-muted hover:text-ink",
               )}
             >
               {option.label}
@@ -280,14 +281,23 @@ export function NotificationFeed({
             </button>
           ))}
         </div>
-        <Button variant="secondary" size="sm" loading={pending} disabled={unread.length === 0} onClick={markAll}>
+        <Button
+          variant="secondary"
+          size="sm"
+          loading={pending}
+          disabled={unread.length === 0}
+          onClick={markAll}
+        >
           {!pending ? <CheckCheck aria-hidden /> : null} Mark all as read
         </Button>
       </div>
 
       {visible.length === 0 ? (
         <div className="grid justify-items-center gap-2 rounded-lg border border-dashed border-control/50 bg-raised px-5 py-10 text-center">
-          <span className="mb-1 grid size-12 place-items-center rounded-full bg-brand-soft text-brand" aria-hidden>
+          <span
+            className="mb-1 grid size-12 place-items-center rounded-full bg-brand-soft text-brand"
+            aria-hidden
+          >
             <CheckCheck className="size-5" />
           </span>
           <p className="font-semibold">You&apos;re all caught up</p>

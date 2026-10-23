@@ -13,11 +13,11 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <div className="absolute -top-48 -left-32 h-[420px] w-[560px] rounded-full bg-brand-soft/70 blur-3xl" />
           <div className="absolute inset-0 bg-dot-grid fade-radial text-ink/[0.05]" />
         </div>
-        <header className="flex h-16 items-center justify-between gap-4 px-4 sm:px-8 lg:px-12">
+        <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-4 border-b border-hairline/70 bg-surface/80 px-4 backdrop-blur-md sm:px-8 lg:px-12">
           <Wordmark />
           <Link
             href="/"
-            className="group inline-flex items-center gap-1.5 text-sm font-semibold text-ink-muted hover:text-ink"
+            className="group inline-flex min-h-10 items-center gap-1.5 text-sm font-semibold text-ink-muted hover:text-ink"
           >
             <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-0.5" aria-hidden />
             Back to site

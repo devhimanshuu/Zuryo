@@ -50,7 +50,10 @@ function FooterCol({ title, links }: { title: string; links: { href: string; lab
       <ul className="mt-3 grid gap-2 text-sm">
         {links.map((l) => (
           <li key={`${l.href}-${l.label}`}>
-            <Link href={l.href} className="text-ink-inverse/90 hover:text-ink-inverse hover:underline">
+            <Link
+              href={l.href}
+              className="inline-block py-1.5 text-ink-inverse/90 hover:text-ink-inverse hover:underline sm:py-0"
+            >
               {l.label}
             </Link>
           </li>

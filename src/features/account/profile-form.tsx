@@ -1,6 +1,6 @@
 "use client";
 
-import { Save } from "lucide-react";
+import { MapPin, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -8,50 +8,94 @@ import { Notice } from "@/components/shared/states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { WORKOUT_CATEGORY_INFO } from "@/lib/booking/categories";
 import { cn } from "@/lib/utils/cn";
 import { WORKOUT_CATEGORIES, type Role, type WorkoutCategory } from "@/lib/validation/enums";
 import { updateProfileAction } from "@/server/actions/account";
 
-type Field = "name" | "phone" | "bio" | "experienceYears" | "workoutCategories";
+type Field =
+  | "name"
+  | "phone"
+  | "bio"
+  | "experienceYears"
+  | "workoutCategories"
+  | "serviceZoneId"
+  | "addressLine"
+  | "specializations"
+  | "acceptingBookings";
 
-/** Edit your own name and phone; trainers also edit the details customers see. Email is fixed. */
+export type ProfileFormDefaults = {
+  name: string;
+  email: string;
+  phone: string;
+  serviceZoneId: string;
+  addressLine: string;
+  bio: string;
+  experienceYears: string;
+  /** Comma-separated focus areas, e.g. "Mobility, Posture". */
+  specializations: string;
+  workoutCategories: WorkoutCategory[];
+  acceptingBookings: boolean;
+};
+
+/**
+ * Edit everything about your account except the email, which is your sign-in identity (and what
+ * Google sign-in matches on) and is shown locked.
+ */
 export function ProfileForm({
   role,
   defaults,
+  zones,
 }: {
   role: Role;
-  defaults: {
-    name: string;
-    phone: string;
-    bio: string;
-    experienceYears: string;
-    workoutCategories: WorkoutCategory[];
-  };
+  defaults: ProfileFormDefaults;
+  zones: Array<{ id: string; name: string; city: string }>;
 }) {
   const router = useRouter();
   const [values, setValues] = useState({
     name: defaults.name,
     phone: defaults.phone,
+    serviceZoneId: defaults.serviceZoneId,
+    addressLine: defaults.addressLine,
     bio: defaults.bio,
     experienceYears: defaults.experienceYears,
+    specializations: defaults.specializations,
   });
   const [categories, setCategories] = useState<WorkoutCategory[]>(defaults.workoutCategories);
+  const [accepting, setAccepting] = useState(defaults.acceptingBookings);
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const set = (f: keyof typeof values) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setValues((v) => ({ ...v, [f]: e.target.value }));
+  const set =
+    (f: keyof typeof values) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+      setValues((v) => ({ ...v, [f]: e.target.value }));
 
   function submit() {
     setErrors({});
     setFormError(null);
+    const base = { name: values.name, phone: values.phone };
     const payload =
       role === "TRAINER"
-        ? { role, ...values, workoutCategories: categories }
-        : { role, name: values.name, phone: values.phone };
+        ? {
+            role,
+            ...base,
+            serviceZoneId: values.serviceZoneId,
+            bio: values.bio,
+            experienceYears: values.experienceYears,
+            workoutCategories: categories,
+            specializations: values.specializations
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean),
+            acceptingBookings: accepting,
+          }
+        : role === "CUSTOMER"
+          ? { role, ...base, serviceZoneId: values.serviceZoneId, addressLine: values.addressLine }
+          : { role, ...base };
     startTransition(async () => {
       try {
         const res = await updateProfileAction(payload);
@@ -117,6 +161,69 @@ export function ProfileForm({
         </div>
       </div>
 
+      <div className="grid gap-1.5">
+        <Label htmlFor="acc-email">Email</Label>
+        <Input
+          id="acc-email"
+          type="email"
+          value={defaults.email}
+          disabled
+          readOnly
+          className="cursor-not-allowed opacity-60"
+        />
+        <p className="text-body-sm text-ink-subtle">
+          Your email is your sign-in identity and can&apos;t be changed here.
+        </p>
+      </div>
+
+      {role !== "OPERATIONS" ? (
+        <div className="grid gap-1.5">
+          <Label htmlFor="acc-zone">{role === "TRAINER" ? "Community you serve" : "Your community"}</Label>
+          <div className="relative">
+            <MapPin
+              className="pointer-events-none absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-ink-subtle"
+              aria-hidden
+            />
+            <Select
+              id="acc-zone"
+              value={values.serviceZoneId}
+              onChange={set("serviceZoneId")}
+              className="pl-9"
+              {...a11y("serviceZoneId")}
+            >
+              {zones.map((z) => (
+                <option key={z.id} value={z.id}>
+                  {z.name} · {z.city}
+                </option>
+              ))}
+            </Select>
+          </div>
+          {err("serviceZoneId") ?? (
+            <p className="text-body-sm text-ink-subtle">
+              Can only change while you have no upcoming sessions.
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      {role === "CUSTOMER" ? (
+        <div className="grid gap-1.5">
+          <Label htmlFor="acc-address">Tower / block and flat</Label>
+          <Input
+            id="acc-address"
+            autoComplete="address-line1"
+            maxLength={120}
+            placeholder="e.g. Tower B, 1204"
+            value={values.addressLine}
+            onChange={set("addressLine")}
+            {...a11y("addressLine")}
+          />
+          {err("addressLine") ?? (
+            <p className="text-body-sm text-ink-subtle">Shown to your trainer so they can find you.</p>
+          )}
+        </div>
+      ) : null}
+
       {role === "TRAINER" ? (
         <>
           <fieldset className="grid gap-2">
@@ -151,6 +258,21 @@ export function ProfileForm({
             </div>
             {err("workoutCategories")}
           </fieldset>
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="acc-focus">Focus areas</Label>
+            <Input
+              id="acc-focus"
+              placeholder="e.g. Mobility, Posture, Weight loss"
+              value={values.specializations}
+              onChange={set("specializations")}
+              {...a11y("specializations")}
+            />
+            {err("specializations") ?? (
+              <p className="text-body-sm text-ink-subtle">Separate with commas. Up to six.</p>
+            )}
+          </div>
+
           <div className="grid gap-1.5 sm:max-w-48">
             <Label htmlFor="acc-exp">Years of experience</Label>
             <Input
@@ -165,6 +287,7 @@ export function ProfileForm({
             />
             {err("experienceYears")}
           </div>
+
           <div className="grid gap-1.5">
             <Label htmlFor="acc-bio">Bio</Label>
             <Textarea
@@ -177,6 +300,21 @@ export function ProfileForm({
             />
             {err("bio")}
           </div>
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-md border border-hairline bg-surface p-3">
+            <input
+              type="checkbox"
+              checked={accepting}
+              onChange={(e) => setAccepting(e.target.checked)}
+              className="mt-0.5 size-4 accent-(--color-brand)"
+            />
+            <span>
+              <span className="block text-sm font-semibold">Accepting new bookings</span>
+              <span className="block text-body-sm text-ink-muted">
+                Turn off to stop being matched to new sessions. Sessions you already have stay with you.
+              </span>
+            </span>
+          </label>
         </>
       ) : null}
 
@@ -186,7 +324,7 @@ export function ProfileForm({
         </Notice>
       ) : null}
       <div>
-        <Button type="submit" variant="primary" loading={pending}>
+        <Button type="submit" variant="primary" loading={pending} className="w-full sm:w-auto">
           <Save aria-hidden /> Save changes
         </Button>
       </div>

@@ -77,7 +77,7 @@ export default async function FitnessPage({ searchParams }: { searchParams: Prom
   const firstName = actor.name.split(" ")[0];
 
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-1 gap-5">
       <PageHeader
         editorial
         title="Fitness"
@@ -286,7 +286,7 @@ export default async function FitnessPage({ searchParams }: { searchParams: Prom
                 ) : null}
                 <Link
                   href="/customer/fitness?tab=profile"
-                  className="text-body-sm font-semibold text-brand hover:underline"
+                  className="inline-flex min-h-9 items-center text-body-sm font-semibold text-brand hover:underline"
                 >
                   Edit profile
                 </Link>

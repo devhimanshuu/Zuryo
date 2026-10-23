@@ -16,7 +16,7 @@ export function MobileNav({ role, children }: { role: Role; children: React.Reac
       <DialogTrigger asChild>
         <button
           type="button"
-          className="grid size-10 place-items-center rounded-md text-ink hover:bg-sunken lg:hidden"
+          className="grid size-10 shrink-0 place-items-center rounded-md text-ink hover:bg-sunken lg:hidden"
           aria-label="Open navigation"
         >
           <Menu className="size-5" aria-hidden />

@@ -90,12 +90,12 @@ function Hero() {
           </dl>
         </div>
 
-        <div className="relative animate-rise [animation-delay:120ms]">
+        <div className="relative mb-12 animate-rise [animation-delay:120ms]">
           <FitnessImage
             image={IMAGES.hero}
             priority
             sizes="(min-width: 1024px) 560px, 100vw"
-            className="aspect-[4/5] rounded-lg shadow-(--shadow-3) ring-1 ring-ink/5 sm:aspect-[5/4] lg:aspect-[4/5]"
+            className="aspect-[4/3] rounded-lg shadow-(--shadow-3) ring-1 ring-ink/5 sm:aspect-[5/4] lg:aspect-square"
           />
           <div
             aria-hidden
@@ -124,7 +124,7 @@ function BookingPreview() {
   return (
     <figure
       aria-label="Preview of choosing a session time"
-      className="absolute right-3 -bottom-8 left-3 rounded-lg border border-hairline bg-raised/95 p-4 shadow-(--shadow-3) backdrop-blur sm:right-auto sm:left-6 sm:w-[340px]"
+      className="absolute right-3 -bottom-14 left-3 rounded-lg border border-hairline bg-raised/95 p-4 shadow-(--shadow-3) backdrop-blur sm:right-auto sm:left-6 sm:w-[340px]"
     >
       <figcaption className="flex items-center justify-between text-body-sm">
         <span className="font-semibold">Thu · Palm Grove Residences</span>
@@ -242,8 +242,8 @@ function InstantOrScheduled() {
           </span>
           <h3 className="mt-4 font-display text-display-md">Start within the hour</h3>
           <p className="mt-2 text-ink-muted">
-            Free this evening? Request a session and ZuryoFit looks for a trainer nearby who can start within 60
-            minutes. If nobody is free, you&apos;ll see the next available times instead of waiting.
+            Free this evening? Request a session and ZuryoFit looks for a trainer nearby who can start within
+            60 minutes. If nobody is free, you&apos;ll see the next available times instead of waiting.
           </p>
           <ul className="mt-5 grid gap-2 text-body-md">
             <Bullet>Live status from request to trainer assigned</Bullet>

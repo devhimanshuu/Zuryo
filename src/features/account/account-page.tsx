@@ -28,15 +28,24 @@ const ROLE_LABEL: Record<Role, string> = {
 export async function AccountPage({ role }: { role: Role }) {
   const actor = await getActor(role);
   const session = await auth();
-  const result = await safely(() => getAccount(getDb(), actor.userId));
-  if (!result.ok || !result.data) return <ErrorState message="We couldn't load your account." />;
+  const [result, zones] = await Promise.all([
+    safely(() => getAccount(getDb(), actor.userId)),
+    safely(() =>
+      getDb().serviceZone.findMany({
+        where: { isActive: true },
+        orderBy: [{ city: "asc" }, { name: "asc" }],
+        select: { id: true, name: true, city: true },
+      }),
+    ),
+  ]);
+  if (!result.ok || !result.data || !zones.ok) return <ErrorState message="We couldn't load your account." />;
   const account = result.data;
   const googleEnabled = isGoogleEnabled();
   const fresh = hasFreshGoogleProof({ method: session?.user?.authMethod, at: session?.user?.authAt });
   const home = ROLE_HOME[role];
 
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-1 gap-5">
       <PageHeader
         editorial
         title="Account"
@@ -75,21 +84,25 @@ export async function AccountPage({ role }: { role: Role }) {
             <CardHeader>
               <div>
                 <CardTitle>Profile details</CardTitle>
-                <CardDescription>
-                  Your email is your sign-in identity and can&apos;t be edited here.
-                </CardDescription>
+                <CardDescription>Update anything here except your email, which is locked.</CardDescription>
               </div>
               <CardIcon icon={UserRound} />
             </CardHeader>
             <CardContent>
               <ProfileForm
                 role={role}
+                zones={zones.data}
                 defaults={{
                   name: account.name,
+                  email: account.email,
                   phone: account.phone ?? "",
+                  serviceZoneId: account.zone?.id ?? "",
+                  addressLine: account.addressLine ?? "",
                   bio: account.trainer?.bio ?? "",
                   experienceYears: account.trainer?.experienceYears?.toString() ?? "",
+                  specializations: account.trainer?.specializations.join(", ") ?? "",
                   workoutCategories: account.trainer?.workoutCategories ?? [],
+                  acceptingBookings: account.trainer?.acceptingBookings ?? true,
                 }}
               />
             </CardContent>
@@ -185,14 +198,14 @@ export async function AccountPage({ role }: { role: Role }) {
               </div>
               <Link
                 href={`${home}/notifications`}
-                className="flex items-center gap-2 text-body-md font-semibold hover:text-brand"
+                className="flex min-h-10 items-center gap-2 text-body-md font-semibold hover:text-brand"
               >
                 <Bell className="size-4 text-ink-muted" aria-hidden /> Notifications
               </Link>
               {role === "CUSTOMER" ? (
                 <Link
                   href="/customer/fitness?tab=profile"
-                  className="flex items-center gap-2 text-body-md font-semibold hover:text-brand"
+                  className="flex min-h-10 items-center gap-2 text-body-md font-semibold hover:text-brand"
                 >
                   <HeartPulse className="size-4 text-ink-muted" aria-hidden /> Fitness profile
                 </Link>

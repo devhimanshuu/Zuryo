@@ -41,7 +41,7 @@ export default async function SignInPage({
       </p>
       <p className="mt-4 text-body-sm text-ink-muted">
         New to ZuryoFit?{" "}
-        <Link href="/sign-up" className="font-semibold text-brand hover:underline">
+        <Link href="/sign-up" className="inline-block py-1.5 font-semibold text-brand hover:underline">
           Create an account
         </Link>
       </p>
@@ -53,7 +53,7 @@ export default async function SignInPage({
               ? `/sign-in/operator?callbackUrl=${encodeURIComponent(callbackUrl)}`
               : "/sign-in/operator"
           }
-          className="group inline-flex items-center gap-1 font-semibold text-brand hover:underline"
+          className="group inline-flex min-h-9 items-center gap-1 font-semibold text-brand hover:underline"
         >
           Log in as operator
           <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden />

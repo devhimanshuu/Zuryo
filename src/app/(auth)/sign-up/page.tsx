@@ -38,7 +38,7 @@ export default async function SignUpPage() {
       </p>
       <p className="mt-4 border-t border-hairline pt-4 text-body-sm text-ink-muted">
         Already have an account?{" "}
-        <Link href="/sign-in" className="font-semibold text-brand hover:underline">
+        <Link href="/sign-in" className="inline-block py-1.5 font-semibold text-brand hover:underline">
           Sign in
         </Link>
       </p>

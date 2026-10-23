@@ -54,7 +54,7 @@ export function CardLink({ href, children }: { href: string; children: React.Rea
   return (
     <Link
       href={href}
-      className="group inline-flex w-fit items-center gap-1 text-sm font-semibold text-brand hover:underline"
+      className="group inline-flex min-h-9 w-fit items-center gap-1 text-sm font-semibold text-brand hover:underline"
     >
       {children}
       <ArrowRight

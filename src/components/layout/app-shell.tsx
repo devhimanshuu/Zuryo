@@ -57,9 +57,12 @@ export function AppShell({
           </MobileNav>
           <Wordmark href={home} className="text-2xl" />
           <WorkspacePill role={role} className="hidden sm:inline-block" />
-          <span className="ml-auto flex items-center gap-1">
+          <span className="ml-auto flex shrink-0 items-center gap-1">
             <CommandTrigger variant="icon" />
-            <ThemeControl />
+            {/* Theme is also in the menu drawer; on the narrowest phones the bar needs the room. */}
+            <span className="hidden min-[420px]:inline-flex">
+              <ThemeControl />
+            </span>
             <Link href={`${home}/account`} className="pr-2" title={`${accountName} — profile & settings`}>
               <Avatar name={accountName} size="sm" />
               <span className="sr-only">Profile and settings</span>
