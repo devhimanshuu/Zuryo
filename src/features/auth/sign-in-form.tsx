@@ -23,9 +23,20 @@ const ROLE_OPTIONS: Array<{ role: Role; label: string; hint: string; icon: Lucid
 const CALLBACK_ORIGIN = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
 /** Email + password sign-in. Credentials go only to the NextAuth credentials endpoint. */
-export function SignInForm({ callbackUrl }: { callbackUrl?: string }) {
+export function SignInForm({
+  callbackUrl,
+  workspaces = ["CUSTOMER", "TRAINER"],
+}: {
+  callbackUrl?: string;
+  /** Which workspaces this page signs in to; one entry hides the picker. */
+  workspaces?: Role[];
+}) {
+  const options = ROLE_OPTIONS.filter((o) => workspaces.includes(o.role));
   const router = useRouter();
-  const [role, setRole] = useState<Role>(() => roleForCallback(callbackUrl, CALLBACK_ORIGIN) ?? "CUSTOMER");
+  const [role, setRole] = useState<Role>(() => {
+    const fromCallback = roleForCallback(callbackUrl, CALLBACK_ORIGIN);
+    return fromCallback && workspaces.includes(fromCallback) ? fromCallback : workspaces[0]!;
+  });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -46,10 +57,7 @@ export function SignInForm({ callbackUrl }: { callbackUrl?: string }) {
         setError("That email and password didn't match an active account for this workspace.");
         return;
       }
-      const callbackRole = roleForCallback(callbackUrl, CALLBACK_ORIGIN);
-      const effectiveRole = callbackRole ?? role;
-      const destination =
-        safeCallbackUrl(callbackUrl, effectiveRole, CALLBACK_ORIGIN) ?? ROLE_HOME[effectiveRole];
+      const destination = safeCallbackUrl(callbackUrl, role, CALLBACK_ORIGIN) ?? ROLE_HOME[role];
       router.push(destination);
       router.refresh();
     });
@@ -77,39 +85,43 @@ export function SignInForm({ callbackUrl }: { callbackUrl?: string }) {
 
   return (
     <div className="grid gap-6">
-      <fieldset className="grid gap-2">
-        <legend className="mb-2 text-sm font-semibold">Workspace</legend>
-        <div className="grid grid-cols-3 gap-1 rounded-md bg-sunken p-1">
-          {ROLE_OPTIONS.map((o) => (
-            <label
-              key={o.role}
-              className={cn(
-                "relative flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-sm px-2 py-1.5 text-sm font-semibold transition-[background-color,color,box-shadow] duration-150",
-                role === o.role ? "bg-raised text-ink shadow-(--shadow-2)" : "text-ink-muted hover:text-ink",
-              )}
-            >
-              <input
-                type="radio"
-                name="workspace"
-                value={o.role}
-                checked={role === o.role}
-                onChange={() => switchRole(o.role)}
-                className="peer sr-only"
-              />
-              <o.icon
+      {options.length > 1 ? (
+        <fieldset className="grid gap-2">
+          <legend className="mb-2 text-sm font-semibold">Workspace</legend>
+          <div className="grid grid-cols-2 gap-1 rounded-md bg-sunken p-1">
+            {options.map((o) => (
+              <label
+                key={o.role}
                 className={cn(
-                  "hidden size-4 shrink-0 sm:block",
-                  role === o.role ? "text-brand" : "text-ink-subtle",
+                  "relative flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-sm px-2 py-1.5 text-sm font-semibold transition-[background-color,color,box-shadow] duration-150",
+                  role === o.role
+                    ? "bg-raised text-ink shadow-(--shadow-2)"
+                    : "text-ink-muted hover:text-ink",
                 )}
-                aria-hidden
-              />
-              <span>{o.label}</span>
-              <span className="pointer-events-none absolute inset-0 rounded-sm peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus" />
-            </label>
-          ))}
-        </div>
-        <p className="text-body-sm text-ink-muted">{ROLE_OPTIONS.find((o) => o.role === role)?.hint}</p>
-      </fieldset>
+              >
+                <input
+                  type="radio"
+                  name="workspace"
+                  value={o.role}
+                  checked={role === o.role}
+                  onChange={() => switchRole(o.role)}
+                  className="peer sr-only"
+                />
+                <o.icon
+                  className={cn(
+                    "hidden size-4 shrink-0 sm:block",
+                    role === o.role ? "text-brand" : "text-ink-subtle",
+                  )}
+                  aria-hidden
+                />
+                <span>{o.label}</span>
+                <span className="pointer-events-none absolute inset-0 rounded-sm peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus" />
+              </label>
+            ))}
+          </div>
+          <p className="text-body-sm text-ink-muted">{ROLE_OPTIONS.find((o) => o.role === role)?.hint}</p>
+        </fieldset>
+      ) : null}
 
       <form
         onSubmit={(e) => {
@@ -189,7 +201,7 @@ export function SignInForm({ callbackUrl }: { callbackUrl?: string }) {
         </Button>
       </form>
 
-      <DemoAccounts selectedEmail={email} onPick={pick} />
+      <DemoAccounts selectedEmail={email} onPick={pick} roles={workspaces} />
     </div>
   );
 }

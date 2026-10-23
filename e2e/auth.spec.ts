@@ -32,11 +32,25 @@ test.describe("authentication", () => {
     await page.waitForURL("**/customer");
   });
 
+  test("cancelling the sign-out confirmation dialog stays signed in", async ({ page }) => {
+    await signInAsCustomer(page);
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByText("Log out of Zuryo?")).toBeVisible();
+    await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(page.getByText("Signed in as")).toBeVisible();
+  });
+
   test("signs out and loses access", async ({ page }) => {
     await signInAsCustomer(page);
     // Wait for hydration: a click before React attaches the handler is silently dropped.
     await page.waitForLoadState("networkidle");
     await page.getByRole("button", { name: "Sign out" }).click();
+
+    // Confirm in the warning dialog:
+    await page.getByRole("dialog").getByRole("button", { name: "Log out" }).click();
 
     // `signOut()` posts to clear the session cookie and then navigates to the sign-in page. Let
     // that navigation finish before touching the page again, or the next `goto` is reported as

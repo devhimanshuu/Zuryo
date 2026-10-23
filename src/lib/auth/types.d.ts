@@ -7,6 +7,8 @@ declare module "next-auth" {
     user: {
       id: string;
       role: Role;
+      /** True for a Google sign-in that hasn't picked a role yet (no account exists). */
+      pending?: boolean;
     } & DefaultSession["user"];
   }
 
@@ -19,5 +21,6 @@ declare module "next-auth/jwt" {
   interface JWT {
     userId?: string;
     role?: Role;
+    pending?: boolean;
   }
 }

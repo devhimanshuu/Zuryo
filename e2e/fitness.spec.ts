@@ -10,7 +10,7 @@ test.beforeEach(({}, testInfo) => {
 test.describe("fitness recommendations", () => {
   test("generates a clearly-labelled rule-based recommendation and books from it", async ({ page }) => {
     await signInAsCustomer(page);
-    await page.goto("/customer/fitness");
+    await page.goto("/customer/fitness?tab=workouts");
 
     await page.getByRole("button", { name: /Generate workout/ }).click();
     await expect(page.getByText("Rule-based")).toBeVisible();
@@ -32,7 +32,7 @@ test.describe("fitness recommendations", () => {
 
   test("enforces the one-per-minute generation cooldown", async ({ page }) => {
     await signInAsCustomer(page);
-    await page.goto("/customer/fitness");
+    await page.goto("/customer/fitness?tab=workouts");
     await page.getByRole("button", { name: /Generate workout/ }).click();
     await expect(page.getByText("Rule-based")).toBeVisible();
     await page.getByRole("button", { name: /Generate workout/ }).click();

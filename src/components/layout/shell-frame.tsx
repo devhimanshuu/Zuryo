@@ -21,7 +21,7 @@ export function ShellFrame({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate the saved preference after mount
+      // Hydrate the saved preference after mount, so server and first client render match.
       setCollapsed(localStorage.getItem(STORAGE_KEY) === "1");
     } catch {
       /* storage unavailable: stay expanded */

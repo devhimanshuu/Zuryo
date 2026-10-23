@@ -32,9 +32,12 @@ const GROUPS: Array<{ role: Role; label: string }> = [
 export function DemoAccounts({
   selectedEmail,
   onPick,
+  roles,
 }: {
   selectedEmail: string;
   onPick: (role: Role, email: string) => void;
+  /** Only these workspaces' accounts are listed. */
+  roles: Role[];
 }) {
   const [open, setOpen] = useState(false);
   const launcher = useRef<HTMLButtonElement>(null);
@@ -96,7 +99,7 @@ export function DemoAccounts({
           </div>
 
           <div className="grid gap-4 overflow-y-auto px-2 py-3">
-            {GROUPS.map((g) => (
+            {GROUPS.filter((g) => roles.includes(g.role)).map((g) => (
               <section key={g.role} aria-label={`${g.label} accounts`} className="grid gap-1">
                 <p
                   className="px-2 text-[11px] font-semibold tracking-[0.08em] text-ink-subtle uppercase"
