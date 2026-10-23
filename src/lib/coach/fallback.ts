@@ -6,9 +6,12 @@ import type { CoachTopic } from "./scope";
  * customer's own data, and always labelled "Rule-based" in the UI. Kept general on purpose: they
  * point to the app's personalised features rather than pretending to be the AI coach.
  */
-export function ruleBasedCoachReply(topic: Exclude<CoachTopic, "MEDICAL" | "OUT_OF_SCOPE">, c: CoachContext): string {
+export function ruleBasedCoachReply(
+  topic: Exclude<CoachTopic, "MEDICAL" | "OUT_OF_SCOPE">,
+  c: CoachContext,
+): string {
   switch (topic) {
-    case "MY_ZURYO":
+    case "MY_ZURYOFIT":
       return [
         c.nextSession
           ? c.nextSession.status === "IN_PROGRESS"
@@ -55,7 +58,9 @@ export function ruleBasedCoachReply(topic: Exclude<CoachTopic, "MEDICAL" | "OUT_
         "- Pick two or three fixed slots a week and book them in advance",
         "- Start smaller than you think, and track a simple streak",
         "- Plan for busy days with a 15-minute fallback routine",
-        c.nextSession ? `Your next session is ${c.nextSession.when}, which is a good anchor for the week.` : 'Booking your next session now, under "Book a session", is a good first step.',
+        c.nextSession
+          ? `Your next session is ${c.nextSession.when}, which is a good anchor for the week.`
+          : 'Booking your next session now, under "Book a session", is a good first step.',
       ].join("\n");
   }
 }

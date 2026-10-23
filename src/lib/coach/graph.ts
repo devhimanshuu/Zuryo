@@ -53,6 +53,10 @@ export type CoachGraphDeps = {
   clock?: () => number;
 };
 
+/** Appended to the system prompt when the customer picked Hindi. All the other rules still apply. */
+const LANGUAGE_NOTE_HI =
+  "\n- Reply in simple Hindi written in Devanagari script. Exercise names may stay in English. All the rules above still apply.";
+
 export const COACH_TIMEOUTS = { classifyMs: 8_000, answerMs: 20_000, totalMs: 30_000 } as const;
 
 type Usage = { inputTokens: number; outputTokens: number };
@@ -60,6 +64,7 @@ type Usage = { inputTokens: number; outputTokens: number };
 const CoachState = Annotation.Root({
   question: Annotation<string>,
   history: Annotation<CoachTurn[]>,
+  language: Annotation<"en" | "hi">,
   /** Epoch ms after which no further model is tried. */
   deadline: Annotation<number>,
   /** Set by the guard node when the message hit a safety red flag. */
@@ -76,7 +81,10 @@ const CoachState = Annotation.Root({
   /** Every model that was called, answered or not (a logged request needs at least one). */
   attempted: Annotation<string[]>({ reducer: (a, b) => a.concat(b), default: () => [] }),
   usage: Annotation<Usage>({
-    reducer: (a, b) => ({ inputTokens: a.inputTokens + b.inputTokens, outputTokens: a.outputTokens + b.outputTokens }),
+    reducer: (a, b) => ({
+      inputTokens: a.inputTokens + b.inputTokens,
+      outputTokens: a.outputTokens + b.outputTokens,
+    }),
     default: () => ({ inputTokens: 0, outputTokens: 0 }),
   }),
 });
@@ -127,7 +135,8 @@ export function failureKind(err: unknown): string {
   const e = err as { status?: unknown; name?: unknown; message?: unknown; code?: unknown };
   const message = typeof e?.message === "string" ? e.message : "";
   if (e?.status === 429 || /rate.?limit|429/i.test(message)) return "RATE_LIMITED";
-  if (e?.name === "AbortError" || e?.name === "TimeoutError" || /abort|timed? ?out/i.test(message)) return "TIMEOUT";
+  if (e?.name === "AbortError" || e?.name === "TimeoutError" || /abort|timed? ?out/i.test(message))
+    return "TIMEOUT";
   if (e?.code === "INVALID_OUTPUT") return "INVALID_OUTPUT";
   return "PROVIDER_ERROR";
 }
@@ -206,7 +215,9 @@ export function buildCoachGraph(deps: CoachGraphDeps) {
 
   async function answer(s: CoachState): Promise<Partial<CoachState>> {
     const messages = [
-      new SystemMessage(`${COACH_SYSTEM_PROMPT}\n\nCustomer data:\n${coachContextToPrompt(s.context!)}`),
+      new SystemMessage(
+        `${COACH_SYSTEM_PROMPT}${s.language === "hi" ? LANGUAGE_NOTE_HI : ""}\n\nCustomer data:\n${coachContextToPrompt(s.context!)}`,
+      ),
       ...historyMessages(s.history),
       new HumanMessage(s.question),
     ];
@@ -238,7 +249,12 @@ export function buildCoachGraph(deps: CoachGraphDeps) {
 
   async function fallback(s: CoachState): Promise<Partial<CoachState>> {
     const topic = s.topic && s.topic !== "MEDICAL" && s.topic !== "OUT_OF_SCOPE" ? s.topic : "WORKOUT";
-    return { route: "ANSWERED", source: "RULE_BASED", modelId: null, reply: ruleBasedCoachReply(topic, s.context!) };
+    return {
+      route: "ANSWERED",
+      source: "RULE_BASED",
+      modelId: null,
+      reply: ruleBasedCoachReply(topic, s.context!),
+    };
   }
 
   return new StateGraph(CoachState)
@@ -265,13 +281,14 @@ export function buildCoachGraph(deps: CoachGraphDeps) {
 /** Runs one question through the graph. Never throws for model failures; every path has a reply. */
 export async function runCoach(
   deps: CoachGraphDeps,
-  input: { question: string; history: CoachTurn[] },
+  input: { question: string; history: CoachTurn[]; language?: "en" | "hi" },
 ): Promise<CoachResult> {
   const clock = deps.clock ?? Date.now;
   const graph = buildCoachGraph(deps);
   const s = await graph.invoke({
     question: input.question,
     history: input.history,
+    language: input.language ?? "en",
     deadline: clock() + COACH_TIMEOUTS.totalMs,
     safetyFlag: null,
     topic: null,

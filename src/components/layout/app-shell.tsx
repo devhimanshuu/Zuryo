@@ -68,7 +68,12 @@ export function AppShell({
         </header>
         <main
           id="main"
-          className={cn("container-page py-6 lg:py-10", role === "CUSTOMER" && "pb-28 lg:pb-10")}
+          className={cn(
+            "container-page py-6 transition-[max-width] duration-200 lg:py-10",
+            // With the sidebar collapsed to its rail, the page uses 90% of the screen width.
+            "lg:group-data-[collapsed=true]/shell:max-w-[90vw]!",
+            role === "CUSTOMER" && "pb-28 lg:pb-10",
+          )}
         >
           <div className="min-w-0 animate-rise">{children}</div>
         </main>
