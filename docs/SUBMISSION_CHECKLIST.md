@@ -4,9 +4,9 @@
 
 | Item              | Value                                                                                                        |
 | ----------------- | ------------------------------------------------------------------------------------------------------------ |
-| Live application  | https://zuryo-one.vercel.app (verified 2026-10-21; see [TESTING.md](TESTING.md))                             |
-| GitHub repository | https://github.com/devhimanshuu/Zuryo (remote verified with `git ls-remote`; see the final commit on `main`) |
-| Hosting           | Vercel project `zuryo` (Hobby) + Neon PostgreSQL (`neondb`, us-east-2)                                       |
+| Live application  | https://zuryo-fit.vercel.app (verified 2026-10-21; see [TESTING.md](TESTING.md))                             |
+| GitHub repository | https://github.com/devhimanshuu/ZuryoFit (remote verified with `git ls-remote`; see the final commit on `main`) |
+| Hosting           | Vercel project `zuryofit` (Hobby) + Neon PostgreSQL (`neondb`, us-east-2)                                       |
 
 ## 2. Demo access (all accounts synthetic; password `password123`)
 
