@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, ListChecks, MessageCircle, Send, Trash2, X } from "lucide-react";
+import { Bot, ListChecks, MessageCircle, Send, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { Notice } from "@/components/shared/states";
@@ -79,6 +79,7 @@ export function CoachChat() {
   const [loading, startLoading] = useTransition();
   const [busy, startAsking] = useTransition();
   const [clearing, startClearing] = useTransition();
+  const [confirmClear, setConfirmClear] = useState(false);
   const [pos, setPos] = useState<Offset | null>(null);
   const [panelBox, setPanelBox] = useState<PanelBox | null>(null);
   const posRef = useRef<Offset | null>(null);
@@ -148,7 +149,12 @@ export function CoachChat() {
     if (!open) return;
     panelRef.current?.focus();
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key !== "Escape") return;
+      // Escape backs out of the confirmation first, then closes the panel.
+      setConfirmClear((asking) => {
+        if (!asking) setOpen(false);
+        return false;
+      });
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -291,8 +297,8 @@ export function CoachChat() {
   }
 
   function clear() {
-    if (messages.length === 0 || clearing) return;
-    if (!window.confirm("Clear your whole conversation with the coach?")) return;
+    if (clearing) return;
+    setConfirmClear(false);
     setNotice(null);
     startClearing(async () => {
       try {
@@ -331,15 +337,16 @@ export function CoachChat() {
           open && "animate-rise",
         )}
       >
-        <div className="flex shrink-0 items-center gap-2.5 border-b border-hairline px-4 py-3">
+        <div className="flex shrink-0 items-center gap-3 border-b border-hairline bg-surface px-4 py-3.5">
           <span
-            className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-soft text-brand"
+            className="relative grid size-10 shrink-0 place-items-center rounded-full bg-brand text-on-brand"
             aria-hidden
           >
-            <MessageCircle className="size-4.5" />
+            <Sparkles className="size-5" />
+            <span className="absolute -right-0.5 -bottom-0.5 size-3 rounded-full border-2 border-surface bg-success" />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-heading-md font-semibold">Coach</h2>
+            <h2 className="text-heading-md leading-tight font-semibold">Zuryo Coach</h2>
             <p className="truncate text-body-sm text-ink-muted">
               Fitness questions only · not medical advice
             </p>
@@ -348,7 +355,7 @@ export function CoachChat() {
             type="button"
             variant="ghost"
             size="icon"
-            onClick={clear}
+            onClick={() => setConfirmClear(true)}
             loading={clearing}
             disabled={messages.length === 0}
             aria-label="Clear conversation"
@@ -370,7 +377,7 @@ export function CoachChat() {
 
         <div
           ref={listRef}
-          className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto overscroll-contain px-4 py-4"
+          className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto overscroll-contain bg-sunken/50 px-4 py-4"
           aria-live="polite"
         >
           {loading ? (
@@ -387,10 +394,13 @@ export function CoachChat() {
               </Button>
             </Notice>
           ) : messages.length === 0 ? (
-            <div className="grid gap-3">
-              <div>
+            <div className="grid gap-4">
+              <div className="grid justify-items-center gap-2 pt-2 text-center">
+                <span className="grid size-12 place-items-center rounded-full bg-brand-soft text-brand" aria-hidden>
+                  <MessageCircle className="size-6" />
+                </span>
                 <p className="text-heading-md font-semibold">Ask your coach</p>
-                <p className="mt-1 text-body-sm text-ink-muted">
+                <p className="text-body-sm text-ink-muted">
                   Training, warm-ups, recovery, everyday nutrition and your own Zuryo sessions. Answers use
                   your profile and recent sessions — and it can&apos;t book, cancel or take payment.
                 </p>
@@ -401,7 +411,7 @@ export function CoachChat() {
                     <button
                       type="button"
                       onClick={() => send(s)}
-                      className="w-full rounded-md border border-hairline bg-surface px-3 py-2 text-left text-body-sm font-semibold text-ink-muted transition-colors hover:border-control hover:bg-sunken hover:text-ink"
+                      className="w-full rounded-lg border border-hairline bg-raised px-3.5 py-2.5 text-left text-body-sm font-semibold text-ink-muted shadow-(--shadow-1) transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand"
                     >
                       {s}
                     </button>
@@ -415,10 +425,10 @@ export function CoachChat() {
                 <li key={m.id} className={cn("flex", m.role === "USER" ? "justify-end" : "justify-start")}>
                   <div
                     className={cn(
-                      "max-w-[88%] rounded-lg px-3.5 py-2.5 text-body-md",
+                      "max-w-[88%] rounded-2xl px-3.5 py-2.5 text-body-md",
                       m.role === "USER"
-                        ? "bg-brand text-on-brand"
-                        : "border border-hairline bg-surface text-ink",
+                        ? "rounded-br-sm bg-brand text-on-brand"
+                        : "rounded-bl-sm border border-hairline bg-raised text-ink shadow-(--shadow-1)",
                     )}
                   >
                     {m.role === "ASSISTANT" ? (
@@ -443,7 +453,7 @@ export function CoachChat() {
 
           {busy ? (
             <div className="flex justify-start" aria-label="The coach is writing">
-              <div className="flex items-center gap-1.5 rounded-lg border border-hairline bg-surface px-4 py-3">
+              <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-sm border border-hairline bg-raised px-4 py-3">
                 {[0, 150, 300].map((delay) => (
                   <span
                     key={delay}
@@ -458,7 +468,7 @@ export function CoachChat() {
 
         <form
           ref={formRef}
-          className="shrink-0 border-t border-hairline px-4 py-3"
+          className="shrink-0 border-t border-hairline bg-raised px-4 py-3"
           onSubmit={(e) => {
             e.preventDefault();
             send(draft);
@@ -502,6 +512,40 @@ export function CoachChat() {
             <span className="tabular">{draft.length}/500</span>
           </p>
         </form>
+
+        {confirmClear ? (
+          <div
+            className="absolute inset-0 z-10 grid place-items-center bg-inverse/40 p-5 animate-fade-in"
+            onClick={() => setConfirmClear(false)}
+          >
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="coach-clear-title"
+              aria-describedby="coach-clear-desc"
+              className="w-full max-w-[19rem] rounded-lg border border-hairline bg-raised p-5 shadow-(--shadow-3)"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span className="grid size-10 place-items-center rounded-full bg-danger/10 text-danger" aria-hidden>
+                <Trash2 className="size-5" />
+              </span>
+              <h3 id="coach-clear-title" className="mt-3 text-heading-md font-semibold">
+                Clear conversation?
+              </h3>
+              <p id="coach-clear-desc" className="mt-1 text-body-sm text-ink-muted">
+                This permanently deletes your whole chat with the coach. It can&apos;t be undone.
+              </p>
+              <div className="mt-4 flex justify-end gap-2">
+                <Button type="button" variant="secondary" size="sm" autoFocus onClick={() => setConfirmClear(false)}>
+                  Cancel
+                </Button>
+                <Button type="button" variant="danger" size="sm" onClick={clear} loading={clearing}>
+                  Clear chat
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <button

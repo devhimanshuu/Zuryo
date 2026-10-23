@@ -55,16 +55,18 @@ export const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
  * Default Groq models (free tier), tried in order: gpt-oss-120b for quality, then Qwen. Groq's
  * catalogue changes; set GROQ_MODEL (comma-separated for a fallback list) to override.
  */
-export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b,qwen/qwen3.8-27b";
+export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b,qwen/qwen3.8-27b,openai/gpt-oss-20b";
 /** Current Haiku: the cheapest Claude model, enough for a short structured plan. */
 export const DEFAULT_ANTHROPIC_MODEL = "claude-haiku-5-5";
 /**
- * Default OpenRouter routing: free-tier models with function calling, tried in order (OpenRouter's
- * `models` fallback moves on when one is rate limited or down). Free models are rate limited and
+ * Default OpenRouter routing: free-tier models with function calling, tried in order (the coach
+ * walks the list itself; plan generation sends the first three, OpenRouter's `models` limit, and
+ * OpenRouter moves on when one is rate limited or down). Verified live 2026-10-23; the free
+ * catalogue churns, so re-check with `npm run coach:smoke`. Free models are rate limited and
  * their availability changes; set OPENROUTER_MODEL to a paid model (e.g.
  * "google/gemini-2.5-flash-lite") for production traffic. A comma-separated value is a fallback list.
  */
-export const DEFAULT_OPENROUTER_MODEL = "minimax/minimax-m3.1-flash:free,google/gemma-4-31b-it:free";
+export const DEFAULT_OPENROUTER_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free,recursive/flint-v1.0:free,poolside/laguna-s-2.1:free,google/gemma-4-31b-it:free,openrouter/free";
 const TOOL_NAME = "submit_workout_plan";
 const TOOL_DESCRIPTION = "Submit the complete structured workout plan.";
 
@@ -292,7 +294,8 @@ export function openRouterProvider(opts: OpenRouterProviderOptions = {}): AiProv
   const models = model
     .split(",")
     .map((m) => m.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .slice(0, 3);
   const fetchFn = opts.fetchFn ?? fetch;
   const timeoutMs = opts.timeoutMs ?? 30_000;
 

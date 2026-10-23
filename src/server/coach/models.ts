@@ -24,9 +24,12 @@ const list = (v: string) =>
     .map((m) => m.trim())
     .filter(Boolean);
 
+/** OpenRouter bills anything without the ":free" suffix, so such ids are dropped, not called. */
+export const isFreeOpenRouterModel = (id: string) => id.endsWith(":free");
+
 /**
- * LangChain chat models for the coach, in the order the graph tries them: Groq first (fast, free
- * tier), then OpenRouter's free models (OpenRouter itself routes across the comma-separated list).
+ * LangChain chat models for the coach, in the order the graph tries them: every Groq model first
+ * (fast, free tier), then every free OpenRouter model, each as its own entry in the failover list.
  * Retries are off: a failure moves straight to the next model instead of waiting on backoff.
  * An explicit `AI_PROVIDER` restricts the coach to that free-tier vendor; "anthropic" (which the
  * recommendation engine supports but the coach does not) leaves both lists empty, so the coach
@@ -57,23 +60,27 @@ export function coachModelsFromEnv(env: CoachModelEnv): CoachModels {
   }
 
   if (env.OPENROUTER_API_KEY && useOpenRouter) {
-    const models = list(env.OPENROUTER_MODEL ?? DEFAULT_OPENROUTER_MODEL);
-    const openRouter = (opts: { temperature: number; maxTokens: number }) =>
+    // One entry per model, so the graph's own failover walks the list: a busy or retired free model
+    // costs one quick failure, not the whole turn. Only ":free" models are ever called.
+    const models = list(env.OPENROUTER_MODEL ?? DEFAULT_OPENROUTER_MODEL).filter(isFreeOpenRouterModel);
+    const openRouter = (model: string, opts: { temperature: number; maxTokens: number }) =>
       new ChatOpenAI({
         apiKey: env.OPENROUTER_API_KEY,
-        model: models[0],
+        model,
         maxRetries: 0,
         ...opts,
-        // OpenRouter-specific: fall back across the list server-side when a free model is busy.
-        ...(models.length > 1 ? { modelKwargs: { models } } : {}),
         configuration: {
           baseURL: OPENROUTER_BASE_URL,
           defaultHeaders: { "X-Title": "Zuryo", ...(env.APP_URL ? { "HTTP-Referer": env.APP_URL } : {}) },
         },
       });
-    const id = `openrouter:${models.join(",")}`;
-    classifiers.push({ id, model: openRouter({ temperature: 0, maxTokens: 600 }) });
-    answerers.push({ id, model: openRouter({ temperature: 0.5, maxTokens: 2000 }) });
+    // Classifying is a one-word job: the first two free models are plenty.
+    for (const m of models.slice(0, 2)) {
+      classifiers.push({ id: `openrouter:${m}`, model: openRouter(m, { temperature: 0, maxTokens: 600 }) });
+    }
+    for (const m of models) {
+      answerers.push({ id: `openrouter:${m}`, model: openRouter(m, { temperature: 0.5, maxTokens: 2000 }) });
+    }
   }
 
   return { classifiers, answerers };
