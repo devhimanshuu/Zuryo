@@ -10,12 +10,12 @@ import { cn } from "@/lib/utils/cn";
 
 /** Seeded demo accounts (see prisma/seed-data.ts). All share one demo password. */
 export const DEMO_ACCOUNTS: Array<{ role: Role; name: string; email: string }> = [
-  { role: "CUSTOMER", name: "Priya Sharma", email: "priya.sharma@demo.zuryofit.example" },
-  { role: "CUSTOMER", name: "Rahul Verma", email: "rahul.verma@demo.zuryofit.example" },
-  { role: "CUSTOMER", name: "Farhan Qureshi", email: "farhan.qureshi@demo.zuryofit.example" },
-  { role: "TRAINER", name: "Arjun Mehta", email: "arjun.mehta@demo.zuryofit.example" },
-  { role: "TRAINER", name: "Kavya Rao", email: "kavya.rao@demo.zuryofit.example" },
-  { role: "OPERATIONS", name: "Neha Kapoor", email: "neha.kapoor@demo.zuryofit.example" },
+  { role: "CUSTOMER", name: "Priya Sharma", email: "priya.sharma@demo.zuryo.example" },
+  { role: "CUSTOMER", name: "Rahul Verma", email: "rahul.verma@demo.zuryo.example" },
+  { role: "CUSTOMER", name: "Farhan Qureshi", email: "farhan.qureshi@demo.zuryo.example" },
+  { role: "TRAINER", name: "Arjun Mehta", email: "arjun.mehta@demo.zuryo.example" },
+  { role: "TRAINER", name: "Kavya Rao", email: "kavya.rao@demo.zuryo.example" },
+  { role: "OPERATIONS", name: "Neha Kapoor", email: "neha.kapoor@demo.zuryo.example" },
 ];
 
 const GROUPS: Array<{ role: Role; label: string }> = [
