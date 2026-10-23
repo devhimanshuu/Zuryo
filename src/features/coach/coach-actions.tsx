@@ -98,8 +98,8 @@ export function CoachActions({ content, onSendPrompt, disabled }: CoachActionsPr
             size="sm"
             onClick={toggleTTS}
             className={cn(
-              "h-7 px-2 text-ink-muted hover:text-ink transition-colors",
-              speaking && "text-brand font-semibold bg-brand-soft",
+              "h-7 px-2 text-ink-muted transition-colors hover:text-ink",
+              speaking && "bg-brand-soft font-semibold text-brand",
             )}
             title={speaking ? "Stop reading" : "Read aloud"}
             aria-label={speaking ? "Stop reading aloud" : "Read aloud"}
@@ -144,7 +144,7 @@ export function CoachActions({ content, onSendPrompt, disabled }: CoachActionsPr
             type="button"
             disabled={disabled}
             onClick={() => onSendPrompt("Can you summarize this into 2-3 quick bullet points?")}
-            className="inline-flex items-center gap-1 rounded-md bg-raised px-2 py-1 text-[11px] font-medium text-ink-muted hover:border-brand hover:bg-brand-soft hover:text-brand transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-md bg-raised px-2 py-1 text-[11px] font-medium text-ink-muted transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand disabled:opacity-50"
             title="Get a concise summary"
           >
             <Sparkles className="size-2.5" />
@@ -154,7 +154,7 @@ export function CoachActions({ content, onSendPrompt, disabled }: CoachActionsPr
             type="button"
             disabled={disabled}
             onClick={() => onSendPrompt("Can you suggest an easier, beginner-friendly alternative to this?")}
-            className="inline-flex items-center gap-1 rounded-md bg-raised px-2 py-1 text-[11px] font-medium text-ink-muted hover:border-brand hover:bg-brand-soft hover:text-brand transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-md bg-raised px-2 py-1 text-[11px] font-medium text-ink-muted transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand disabled:opacity-50"
             title="Make it easier"
           >
             <Wand2 className="size-2.5" />

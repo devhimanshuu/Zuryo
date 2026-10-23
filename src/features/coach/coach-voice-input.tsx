@@ -47,13 +47,19 @@ export function CoachVoiceInput({ onTranscript, disabled, className }: CoachVoic
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const SpeechRec = (window as unknown as {
-      SpeechRecognition?: SpeechConstructor;
-      webkitSpeechRecognition?: SpeechConstructor;
-    }).SpeechRecognition || (window as unknown as {
-      SpeechRecognition?: SpeechConstructor;
-      webkitSpeechRecognition?: SpeechConstructor;
-    }).webkitSpeechRecognition;
+    const SpeechRec =
+      (
+        window as unknown as {
+          SpeechRecognition?: SpeechConstructor;
+          webkitSpeechRecognition?: SpeechConstructor;
+        }
+      ).SpeechRecognition ||
+      (
+        window as unknown as {
+          SpeechRecognition?: SpeechConstructor;
+          webkitSpeechRecognition?: SpeechConstructor;
+        }
+      ).webkitSpeechRecognition;
 
     if (SpeechRec) {
       setSupported(true);
@@ -131,14 +137,14 @@ export function CoachVoiceInput({ onTranscript, disabled, className }: CoachVoic
       title={listening ? "Listening... click to stop" : "Ask using voice"}
       className={cn(
         "relative size-9 transition-colors",
-        listening && "text-brand bg-brand-soft hover:bg-brand-soft",
+        listening && "bg-brand-soft text-brand hover:bg-brand-soft",
         className,
       )}
     >
       {listening ? (
         <>
           <span className="absolute inset-0 animate-ping rounded-full bg-brand opacity-30" />
-          <Mic className="size-4 text-brand animate-pulse" />
+          <Mic className="size-4 animate-pulse text-brand" />
         </>
       ) : (
         <Mic className="size-4 text-ink-muted hover:text-ink" />

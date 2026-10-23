@@ -1,7 +1,13 @@
 import type { BaseMessage } from "@langchain/core/messages";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { CoachModel, CoachModels } from "@/lib/coach/graph";
-import { askCoach, clearCoachHistory, getCoachThread, type CoachDeps } from "@/server/coach/coach-service";
+import {
+  askCoach,
+  clearCoachHistory,
+  getCoachThread,
+  undoLastCoachTurn,
+  type CoachDeps,
+} from "@/server/coach/coach-service";
 import { NOW, alice, arun, bob, createTestDb, resetAndSeed, testDeps } from "./helpers";
 
 const db = createTestDb();
@@ -172,6 +178,31 @@ describe("coach chat", () => {
 
     expect(await db.chatMessage.count()).toBe(0);
     expect(await db.aiRequestLog.count()).toBe(0);
+  });
+
+  it("takes back the latest turn for regenerate/edit, and only the asking customer's", async () => {
+    await askCoach(deps(workingModels()), alice, { message: "How should I warm up?" });
+    await askCoach(deps(workingModels()), bob, { message: "Bob's question please" });
+    const undone = await undoLastCoachTurn(testDeps(db), alice);
+    expect(undone).toEqual({ ok: true, data: { question: "How should I warm up?" } });
+    expect(await getCoachThread(db, alice.userId)).toHaveLength(0);
+    expect(await getCoachThread(db, bob.userId)).toHaveLength(2);
+
+    const nothing = await undoLastCoachTurn(testDeps(db), alice);
+    expect(nothing.ok).toBe(false);
+    const forbidden = await undoLastCoachTurn(testDeps(db), arun);
+    expect(forbidden.ok).toBe(false);
+  });
+
+  it("asks the model to reply in Hindi when that language is chosen", async () => {
+    const models = workingModels();
+    const res = await askCoach(deps(models), alice, { message: "How should I warm up?", language: "hi" });
+    expect(res.ok).toBe(true);
+    const system = String(models.answerers[0]!.calls[0]![0]!.content);
+    expect(system).toContain("Devanagari");
+    const plain = workingModels();
+    await askCoach(deps(plain), alice, { message: "How should I warm up?" });
+    expect(String(plain.answerers[0]!.calls[0]![0]!.content)).not.toContain("Devanagari");
   });
 
   it("clears only the asking customer's conversation", async () => {

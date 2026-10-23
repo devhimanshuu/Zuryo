@@ -1,16 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {
-  AlertCircle,
-  Calendar,
-  Clock,
-  Info,
-  Lightbulb,
-  Package,
-  Sparkles,
-  Trophy,
-} from "lucide-react";
+import { AlertCircle, Calendar, Clock, Info, Lightbulb, Package, Sparkles, Trophy } from "lucide-react";
 import React, { useState } from "react";
 import { CoachTimer } from "./coach-timer";
 import { cn } from "@/lib/utils/cn";
@@ -86,7 +77,7 @@ export function CoachMarkdown({ content, isAssistant }: CoachMarkdownProps) {
   const [activeTimerLabel, setActiveTimerLabel] = useState<string>("Rest Interval");
 
   if (!isAssistant) {
-    return <p className="whitespace-pre-line text-body-md leading-relaxed">{content}</p>;
+    return <p className="text-body-md leading-relaxed whitespace-pre-line">{content}</p>;
   }
 
   const lines = content.split("\n");
@@ -114,7 +105,7 @@ export function CoachMarkdown({ content, isAssistant }: CoachMarkdownProps) {
                         setActiveTimerSec(timerInfo.seconds);
                         setActiveTimerLabel(timerInfo.label);
                       }}
-                      className="ml-2 inline-flex items-center gap-1 rounded bg-brand-soft px-1.5 py-0.5 text-[11px] font-semibold text-brand hover:bg-brand hover:text-on-brand transition-colors"
+                      className="ml-2 inline-flex items-center gap-1 rounded bg-brand-soft px-1.5 py-0.5 text-[11px] font-semibold text-brand transition-colors hover:bg-brand hover:text-on-brand"
                     >
                       <Clock className="size-2.5" />
                       <span>{timerInfo.seconds}s timer</span>
@@ -157,7 +148,7 @@ export function CoachMarkdown({ content, isAssistant }: CoachMarkdownProps) {
           key={`callout-${i}`}
           className={cn(
             "my-2 flex items-start gap-2.5 rounded-lg border p-2.5 text-body-sm leading-relaxed",
-            callout.type === "tip" && "border-brand-soft bg-brand-soft/40 text-brand-700 dark:text-brand-100",
+            callout.type === "tip" && "text-brand-700 dark:text-brand-100 border-brand-soft bg-brand-soft/40",
             callout.type === "warning" && "border-warning/30 bg-warning-soft/30 text-ink",
             callout.type === "goal" && "border-info/30 bg-info-soft/30 text-ink",
             callout.type === "note" && "border-hairline bg-surface text-ink",
@@ -165,8 +156,8 @@ export function CoachMarkdown({ content, isAssistant }: CoachMarkdownProps) {
         >
           <span className="mt-0.5 shrink-0">
             {callout.type === "tip" && <Lightbulb className="size-4 text-brand" />}
-            {callout.type === "warning" && <AlertCircle className="size-4 text-warning-600" />}
-            {callout.type === "goal" && <Trophy className="size-4 text-info-600" />}
+            {callout.type === "warning" && <AlertCircle className="text-warning-600 size-4" />}
+            {callout.type === "goal" && <Trophy className="text-info-600 size-4" />}
             {callout.type === "note" && <Info className="size-4 text-ink-muted" />}
           </span>
           <div>
@@ -225,8 +216,10 @@ export function CoachMarkdown({ content, isAssistant }: CoachMarkdownProps) {
   // Detect concierge links for in-chat deep linking
   const lower = content.toLowerCase();
   const showBookingAction = lower.includes("book") || lower.includes("session") || lower.includes("schedule");
-  const showPackageAction = lower.includes("package") || lower.includes("renewal") || lower.includes("sessions left");
-  const showFitnessAction = lower.includes("goal") || lower.includes("workout plan") || lower.includes("assessment");
+  const showPackageAction =
+    lower.includes("package") || lower.includes("renewal") || lower.includes("sessions left");
+  const showFitnessAction =
+    lower.includes("goal") || lower.includes("workout plan") || lower.includes("assessment");
 
   return (
     <div className="space-y-1.5">
@@ -249,7 +242,7 @@ export function CoachMarkdown({ content, isAssistant }: CoachMarkdownProps) {
           {showBookingAction && (
             <Link
               href="/customer/bookings/new"
-              className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-raised px-2.5 py-1 text-xs font-semibold text-brand hover:border-brand hover:bg-brand-soft transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-raised px-2.5 py-1 text-xs font-semibold text-brand transition-colors hover:border-brand hover:bg-brand-soft"
             >
               <Calendar className="size-3" />
               Book a session
@@ -258,7 +251,7 @@ export function CoachMarkdown({ content, isAssistant }: CoachMarkdownProps) {
           {showPackageAction && (
             <Link
               href="/customer/packages"
-              className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-raised px-2.5 py-1 text-xs font-semibold text-ink-muted hover:border-brand hover:bg-brand-soft hover:text-brand transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-raised px-2.5 py-1 text-xs font-semibold text-ink-muted transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand"
             >
               <Package className="size-3" />
               View packages
@@ -267,7 +260,7 @@ export function CoachMarkdown({ content, isAssistant }: CoachMarkdownProps) {
           {showFitnessAction && (
             <Link
               href="/customer/fitness"
-              className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-raised px-2.5 py-1 text-xs font-semibold text-ink-muted hover:border-brand hover:bg-brand-soft hover:text-brand transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-raised px-2.5 py-1 text-xs font-semibold text-ink-muted transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand"
             >
               <Sparkles className="size-3" />
               My fitness plan

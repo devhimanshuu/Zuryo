@@ -7,8 +7,10 @@ import {
   clearCoachHistory,
   defaultCoachDeps,
   getCoachThreadWithSuggestions,
+  undoLastCoachTurn,
 } from "@/server/coach/coach-service";
 import type { CoachMessageView } from "@/lib/coach/thread";
+import type { CoachNudge } from "@/lib/coach/nudge";
 import type { SmartSuggestion } from "@/lib/coach/suggestions";
 import { runAction } from "./run";
 
@@ -18,6 +20,7 @@ import { runAction } from "./run";
 export type CoachThreadData = {
   messages: CoachMessageView[];
   suggestions: SmartSuggestion[];
+  nudge: CoachNudge | null;
 };
 
 /** The stored conversation and dynamic smart prompts, loaded when the coach opens. */
@@ -36,5 +39,12 @@ export async function askCoachAction(input: unknown): Promise<ServiceResult<Coac
 export async function clearCoachHistoryAction(): Promise<ServiceResult<{ deleted: number }>> {
   return runAction("coach:clear", async () =>
     clearCoachHistory(defaultCoachDeps(), await getActor("CUSTOMER")),
+  );
+}
+
+/** Removes the latest question and reply so the client can regenerate or edit it. */
+export async function undoLastCoachTurnAction(): Promise<ServiceResult<{ question: string }>> {
+  return runAction("coach:undo", async () =>
+    undoLastCoachTurn(defaultCoachDeps(), await getActor("CUSTOMER")),
   );
 }

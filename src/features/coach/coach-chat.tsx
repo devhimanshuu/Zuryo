@@ -1,12 +1,31 @@
 "use client";
 
-import { Bot, Clock, ListChecks, MessageCircle, Send, Sparkles, Trash2, X } from "lucide-react";
+import {
+  Bot,
+  Clock,
+  Copy,
+  Download,
+  ListChecks,
+  MessageCircle,
+  Pencil,
+  Pin,
+  PinOff,
+  RotateCcw,
+  Search,
+  Send,
+  Share2,
+  Trash2,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { Notice } from "@/components/shared/states";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { formatTranscript, transcriptFileName } from "@/lib/coach/export";
+import type { CoachNudge } from "@/lib/coach/nudge";
 import { COACH_ROUTE_NOTE, type CoachMessageView } from "@/lib/coach/thread";
 import {
   SUGGESTION_CATEGORIES,
@@ -14,18 +33,38 @@ import {
   type SuggestionCategory,
 } from "@/lib/coach/suggestions";
 import { cn } from "@/lib/utils/cn";
-import { askCoachAction, clearCoachHistoryAction, loadCoachThreadAction } from "@/server/actions/coach";
+import {
+  askCoachAction,
+  clearCoachHistoryAction,
+  loadCoachThreadAction,
+  undoLastCoachTurnAction,
+} from "@/server/actions/coach";
 import { CoachActions } from "./coach-actions";
 import { CoachFeedback } from "./coach-feedback";
+import { CoachFollowUps } from "./coach-followups";
+import { CoachMenu, type CoachMenuItem } from "./coach-menu";
 import { CoachMarkdown } from "./coach-markdown";
 import { CoachMemory } from "./coach-memory";
+import { RevealedMarkdown } from "./coach-reveal";
 import { CoachTimer } from "./coach-timer";
 import { CoachVoiceInput } from "./coach-voice-input";
 
 const LAUNCHER_SIZE = 56;
 const EDGE = 12;
 const LAUNCHER_GAP = 12;
-const POSITION_KEY = "zuryo:coach-launcher";
+const POSITION_KEY = "zuryofit:coach-launcher";
+const LANGUAGE_KEY = "zuryofit:coach-language";
+const PINS_KEY = "zuryofit:coach-pins";
+
+type Language = "en" | "hi";
+
+/** Removes the newest turn from the list the way the server does: the reply and its question. */
+function dropLastTurn(list: CoachMessageView[]): CoachMessageView[] {
+  const out = [...list];
+  if (out.at(-1)?.role === "ASSISTANT") out.pop();
+  if (out.at(-1)?.role === "USER") out.pop();
+  return out;
+}
 
 type Offset = { right: number; bottom: number };
 type PanelBox = { left: number; top: number; width: number; height: number };
@@ -47,6 +86,10 @@ function clampOffset(offset: Offset, width: number, height: number): Offset {
 function panelBoxFor(launcher: DOMRect): PanelBox {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
+  // On a phone the chat is a near-full-screen sheet: a floating card leaves too little room to type.
+  if (vw < 640) {
+    return { left: EDGE, top: EDGE, width: vw - EDGE * 2, height: vh - EDGE * 2 };
+  }
   const width = Math.min(vw - EDGE * 2, vw >= 1024 ? 400 : vw - 24);
   const desired = vw >= 1024 ? Math.min(vh * 0.76, 576) : Math.min(vh * 0.68, 512);
   const spaceAbove = launcher.top - LAUNCHER_GAP - EDGE;
@@ -62,6 +105,16 @@ function panelBoxFor(launcher: DOMRect): PanelBox {
     width: Math.round(width),
     height: Math.round(height),
   };
+}
+
+/** "7:42 pm" for today, otherwise "22 Oct, 7:42 pm". Rendered client-side only, so no hydration drift. */
+function messageTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const time = d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+  return d.toDateString() === new Date().toDateString()
+    ? time
+    : `${d.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}, ${time}`;
 }
 
 /**
@@ -88,6 +141,14 @@ export function CoachChat() {
   const [busy, startAsking] = useTransition();
   const [clearing, startClearing] = useTransition();
   const [confirmClear, setConfirmClear] = useState(false);
+  const [language, setLanguage] = useState<Language>("en");
+  const [pins, setPins] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [pinnedOnly, setPinnedOnly] = useState(false);
+  const [nudge, setNudge] = useState<CoachNudge | null>(null);
+  const [revealId, setRevealId] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [pos, setPos] = useState<Offset | null>(null);
   const [panelBox, setPanelBox] = useState<PanelBox | null>(null);
   const posRef = useRef<Offset | null>(null);
@@ -95,6 +156,8 @@ export function CoachChat() {
   const launcherRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const initialScrolled = useRef(false);
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -127,6 +190,41 @@ export function CoachChat() {
       /* storage unavailable: keep the default corner */
     }
   }, []);
+
+  // Language and pins live in this browser only.
+  useEffect(() => {
+    try {
+      const lang = localStorage.getItem(LANGUAGE_KEY);
+      if (lang === "en" || lang === "hi") setLanguage(lang);
+      const raw = localStorage.getItem(PINS_KEY);
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed))
+        setPins(parsed.filter((x): x is string => typeof x === "string").slice(0, 200));
+    } catch {
+      /* storage unavailable: defaults */
+    }
+  }, []);
+
+  function chooseLanguage(next: Language) {
+    setLanguage(next);
+    try {
+      localStorage.setItem(LANGUAGE_KEY, next);
+    } catch {
+      /* the choice just won't persist */
+    }
+  }
+
+  function togglePin(id: string) {
+    setPins((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      try {
+        localStorage.setItem(PINS_KEY, JSON.stringify(next));
+      } catch {
+        /* the pin just won't persist */
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     function onResize() {
@@ -168,10 +266,33 @@ export function CoachChat() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  // Typing can start straight away: focus lands in the message box once the thread is ready.
   useEffect(() => {
-    if (!open) return;
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, busy, open, loaded]);
+    if (open && loaded && !loadError) inputRef.current?.focus();
+  }, [open, loaded, loadError]);
+
+  // A new reply scrolls to where it begins (so a long answer is read from the top); everything
+  // else, including the first paint of a stored thread, goes to the bottom.
+  useEffect(() => {
+    const list = listRef.current;
+    if (!open || !list) return;
+    const last = messages[messages.length - 1];
+    const smooth = initialScrolled.current;
+    initialScrolled.current = loaded;
+    if (smooth && last?.role === "ASSISTANT") {
+      const el = list.querySelector<HTMLElement>(`[data-msg="${CSS.escape(last.id)}"]`);
+      if (el) {
+        const top = el.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop - 12;
+        list.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+        return;
+      }
+    }
+    list.scrollTo({ top: list.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+  }, [messages, open, loaded]);
+
+  useEffect(() => {
+    if (busy) listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
+  }, [busy]);
 
   function load() {
     setLoadError(null);
@@ -188,6 +309,7 @@ export function CoachChat() {
         } else {
           setMessages(data.messages);
           setSuggestions(data.suggestions);
+          setNudge(data.nudge ?? null);
         }
         setLoaded(true);
       } catch {
@@ -277,10 +399,8 @@ export function CoachChat() {
     toggle();
   }
 
-  function send(text: string) {
-    const content = text.trim();
-    if (!content || busy) return;
-    setNotice(null);
+  /** One question: optimistic bubble, server call, honest rollback when nothing was saved. */
+  async function ask(content: string) {
     const local: CoachMessageView = {
       id: `local-${Date.now()}`,
       role: "USER",
@@ -291,24 +411,163 @@ export function CoachChat() {
       createdAt: new Date().toISOString(),
     };
     setMessages((m) => [...m, local]);
-    setDraft("");
-    startAsking(async () => {
-      try {
-        const res = await askCoachAction({ message: content });
-        if (!res.ok) {
-          setMessages((m) => m.filter((x) => x.id !== local.id));
-          setDraft(content);
-          setNotice(res.error.message);
-          return;
-        }
-        setMessages((m) => [...m, res.data]);
-      } catch {
+    try {
+      const res = await askCoachAction({ message: content, language });
+      if (!res.ok) {
         setMessages((m) => m.filter((x) => x.id !== local.id));
         setDraft(content);
-        setNotice("We couldn't reach Zuryo. Nothing was saved; try again.");
+        setNotice(res.error.message);
+        return;
+      }
+      setMessages((m) => [...m, res.data]);
+      setRevealId(res.data.id);
+    } catch {
+      setMessages((m) => m.filter((x) => x.id !== local.id));
+      setDraft(content);
+      setNotice("We couldn't reach ZuryoFit. Nothing was saved; try again.");
+    }
+  }
+
+  function send(text: string) {
+    const content = text.trim();
+    if (!content || busy) return;
+    setNotice(null);
+    setDraft("");
+    startAsking(() => ask(content));
+  }
+
+  /** Regenerate asks the same question again; edit puts it back in the box to change first. */
+  function redo(mode: "regenerate" | "edit") {
+    if (busy) return;
+    setNotice(null);
+    startAsking(async () => {
+      try {
+        const undone = await undoLastCoachTurnAction();
+        if (!undone.ok) {
+          setNotice(undone.error.message);
+          return;
+        }
+        setMessages(dropLastTurn);
+        if (mode === "edit") {
+          setDraft(undone.data.question);
+          inputRef.current?.focus();
+          return;
+        }
+        await ask(undone.data.question);
+      } catch {
+        setNotice("We couldn't redo that. Check your connection and try again.");
       }
     });
   }
+
+  function exportText() {
+    return formatTranscript(messages, { exportedAt: new Date() });
+  }
+
+  function downloadChat() {
+    const blob = new Blob([exportText()], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = transcriptFileName(new Date());
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Conversation downloaded");
+  }
+
+  async function copyChat() {
+    try {
+      await navigator.clipboard.writeText(exportText());
+      toast.success("Conversation copied");
+    } catch {
+      toast.error("Couldn't copy the conversation");
+    }
+  }
+
+  async function shareChat() {
+    try {
+      await navigator.share({ title: "ZuryoFit Coach conversation", text: exportText() });
+    } catch {
+      /* cancelled or unsupported: nothing to report */
+    }
+  }
+
+  function openSearch() {
+    setSearchOpen(true);
+    requestAnimationFrame(() => searchRef.current?.focus());
+  }
+
+  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+  const pinCount = messages.filter((m) => pins.includes(m.id)).length;
+  const needle = query.trim().toLowerCase();
+  const visible = messages.filter(
+    (m) => (!needle || m.content.toLowerCase().includes(needle)) && (!pinnedOnly || pins.includes(m.id)),
+  );
+  const filtering = needle !== "" || pinnedOnly;
+  const lastAssistantId = [...messages].reverse().find((m) => m.role === "ASSISTANT")?.id;
+  const lastUserId = [...messages].reverse().find((m) => m.role === "USER")?.id;
+  const lastId = messages.at(-1)?.id;
+
+  const menuItems: CoachMenuItem[] = [
+    { kind: "label", label: "Conversation" },
+    {
+      kind: "action",
+      label: "Search messages",
+      icon: <Search className="size-4" />,
+      onSelect: openSearch,
+      disabled: messages.length === 0,
+    },
+    {
+      kind: "action",
+      label: pinnedOnly ? "Show all messages" : `Pinned messages (${pinCount})`,
+      icon: <Pin className="size-4" />,
+      onSelect: () => setPinnedOnly((v) => !v),
+      disabled: !pinnedOnly && pinCount === 0,
+    },
+    {
+      kind: "action",
+      label: "Download as text",
+      icon: <Download className="size-4" />,
+      onSelect: downloadChat,
+      disabled: messages.length === 0,
+    },
+    {
+      kind: "action",
+      label: "Copy conversation",
+      icon: <Copy className="size-4" />,
+      onSelect: () => void copyChat(),
+      disabled: messages.length === 0,
+    },
+    ...(canShare
+      ? ([
+          {
+            kind: "action",
+            label: "Share…",
+            icon: <Share2 className="size-4" />,
+            onSelect: () => void shareChat(),
+            disabled: messages.length === 0,
+          },
+        ] as CoachMenuItem[])
+      : []),
+    { kind: "separator" },
+    { kind: "label", label: "Reply language" },
+    { kind: "radio", label: "English", checked: language === "en", onSelect: () => chooseLanguage("en") },
+    {
+      kind: "radio",
+      label: "हिन्दी (Hindi)",
+      checked: language === "hi",
+      onSelect: () => chooseLanguage("hi"),
+    },
+    { kind: "separator" },
+    {
+      kind: "action",
+      label: "Clear conversation",
+      icon: <Trash2 className="size-4" />,
+      onSelect: () => setConfirmClear(true),
+      disabled: messages.length === 0,
+      danger: true,
+    },
+  ];
 
   function clear() {
     if (clearing) return;
@@ -322,6 +581,9 @@ export function CoachChat() {
           return;
         }
         setMessages([]);
+        setQuery("");
+        setSearchOpen(false);
+        setPinnedOnly(false);
       } catch {
         setNotice("We couldn't clear the conversation. Try again.");
       }
@@ -356,13 +618,13 @@ export function CoachChat() {
             className="relative grid size-10 shrink-0 place-items-center rounded-full bg-brand text-on-brand"
             aria-hidden
           >
-            <Sparkles className="size-5" />
+            <Bot className="size-5" />
             <span className="absolute -right-0.5 -bottom-0.5 size-3 rounded-full border-2 border-surface bg-success" />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-heading-md leading-tight font-semibold">Zuryo Coach</h2>
+            <h2 className="text-heading-md leading-tight font-semibold">ZuryoFit Coach</h2>
             <p className="truncate text-body-sm text-ink-muted">
-              Fitness questions only · not medical advice
+              Fitness questions only · not medical advice{language === "hi" ? " · Hindi replies" : ""}
             </p>
           </div>
           <Button
@@ -376,18 +638,7 @@ export function CoachChat() {
           >
             <Clock className="size-4" />
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => setConfirmClear(true)}
-            loading={clearing}
-            disabled={messages.length === 0}
-            aria-label="Clear conversation"
-            className="size-9"
-          >
-            <Trash2 aria-hidden />
-          </Button>
+          <CoachMenu items={menuItems} />
           <Button
             type="button"
             variant="ghost"
@@ -401,10 +652,88 @@ export function CoachChat() {
         </div>
 
         {showQuickTimer && (
-          <div className="border-b border-hairline bg-surface p-3 animate-fade-in">
+          <div className="animate-fade-in border-b border-hairline bg-surface p-3">
             <CoachTimer onClose={() => setShowQuickTimer(false)} />
           </div>
         )}
+
+        {searchOpen || pinnedOnly ? (
+          <div className="flex shrink-0 items-center gap-2 border-b border-hairline bg-surface px-3 py-2">
+            <div className="relative min-w-0 flex-1">
+              <Search
+                className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-subtle"
+                aria-hidden
+              />
+              <input
+                ref={searchRef}
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    e.stopPropagation();
+                    setQuery("");
+                    setSearchOpen(false);
+                  }
+                }}
+                placeholder="Search this conversation"
+                aria-label="Search this conversation"
+                className="h-9 w-full rounded-md border border-control bg-raised pr-2 pl-8 text-body-sm focus-visible:border-brand focus-visible:ring-1 focus-visible:ring-brand focus-visible:outline-none"
+              />
+            </div>
+            <button
+              type="button"
+              aria-pressed={pinnedOnly}
+              onClick={() => setPinnedOnly((v) => !v)}
+              className={cn(
+                "inline-flex h-9 items-center gap-1 rounded-md px-2.5 text-xs font-semibold transition-colors",
+                pinnedOnly ? "bg-brand text-on-brand" : "bg-sunken text-ink-muted hover:text-ink",
+              )}
+            >
+              <Pin className="size-3.5" aria-hidden /> Pinned
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setQuery("");
+                setSearchOpen(false);
+                setPinnedOnly(false);
+              }}
+              className="grid size-9 place-items-center rounded-md text-ink-muted hover:bg-sunken hover:text-ink"
+              aria-label="Close search"
+            >
+              <X className="size-4" aria-hidden />
+            </button>
+          </div>
+        ) : null}
+
+        {nudge && loaded && !filtering ? (
+          <div className="flex shrink-0 items-start gap-3 border-b border-hairline bg-brand-soft/60 px-4 py-2.5">
+            <div className="min-w-0 flex-1">
+              <p className="text-body-sm font-semibold">{nudge.title}</p>
+              <p className="text-body-sm text-ink-muted">{nudge.detail}</p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  send(nudge.prompt);
+                  setNudge(null);
+                }}
+                className="mt-1.5 rounded-full bg-brand px-3 py-1 text-xs font-semibold text-on-brand transition-colors hover:bg-brand-strong disabled:opacity-50"
+              >
+                {nudge.cta}
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setNudge(null)}
+              className="grid size-7 shrink-0 place-items-center rounded-md text-ink-muted hover:bg-raised hover:text-ink"
+              aria-label="Dismiss suggestion"
+            >
+              <X className="size-4" aria-hidden />
+            </button>
+          </div>
+        ) : null}
 
         <div
           ref={listRef}
@@ -431,11 +760,11 @@ export function CoachChat() {
                   className="grid size-12 place-items-center rounded-full bg-brand-soft text-brand"
                   aria-hidden
                 >
-                  <MessageCircle className="size-6" />
+                  <Bot className="size-6" />
                 </span>
                 <p className="text-heading-md font-semibold">Ask your coach</p>
                 <p className="text-body-sm text-ink-muted">
-                  Training, warm-ups, recovery, everyday nutrition and your own Zuryo sessions. Answers use
+                  Training, warm-ups, recovery, everyday nutrition and your own ZuryoFit sessions. Answers use
                   your profile and recent sessions — and it can&apos;t book, cancel or take payment.
                 </p>
               </div>
@@ -488,49 +817,126 @@ export function CoachChat() {
             </div>
           ) : (
             <ul className="grid gap-3">
-              {messages.map((m) => (
-                <li key={m.id} className={cn("flex", m.role === "USER" ? "justify-end" : "justify-start")}>
-                  <div
-                    className={cn(
-                      "max-w-[88%] rounded-2xl px-3.5 py-2.5 text-body-md",
-                      m.role === "USER"
-                        ? "rounded-br-sm bg-brand text-on-brand"
-                        : "rounded-bl-sm border border-hairline bg-raised text-ink shadow-(--shadow-1)",
-                    )}
-                  >
-                    {m.role === "ASSISTANT" ? (
-                      <p className="mb-1 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-ink-muted">
-                        {m.source === "AI" ? (
-                          <Bot className="size-3.5" aria-hidden />
-                        ) : (
-                          <ListChecks className="size-3.5" aria-hidden />
-                        )}
-                        {m.source === "AI" ? "AI coach" : "Curated answer"}
-                        {m.route && m.route !== "ANSWERED" ? (
-                          <span>· {COACH_ROUTE_NOTE[m.route]}</span>
-                        ) : null}
-                      </p>
-                    ) : null}
-                    <CoachMarkdown content={m.content} isAssistant={m.role === "ASSISTANT"} />
-                    {m.role === "ASSISTANT" && (
-                      <CoachActions
-                        content={m.content}
-                        onSendPrompt={(prompt) => send(prompt)}
-                        disabled={busy}
-                      />
-                    )}
-                    {m.role === "ASSISTANT" && (
-                      <CoachFeedback messageId={m.id} />
-                    )}
-                  </div>
+              {filtering ? (
+                <li className="text-center text-body-sm text-ink-muted">
+                  {visible.length === 0
+                    ? "No messages match."
+                    : `${visible.length} message${visible.length === 1 ? "" : "s"} found`}
                 </li>
-              ))}
+              ) : null}
+              {visible.map((m) => {
+                const pinned = pins.includes(m.id);
+                const settled = revealId !== m.id;
+                const mine = m.role === "USER";
+                return (
+                  <li
+                    key={m.id}
+                    data-msg={m.id}
+                    className={cn("flex", mine ? "justify-end" : "justify-start")}
+                  >
+                    <div
+                      className={cn(
+                        "max-w-[88%] rounded-2xl px-3.5 py-2.5 text-body-md",
+                        mine
+                          ? "rounded-br-sm bg-brand text-on-brand"
+                          : "rounded-bl-sm border border-hairline bg-raised text-ink shadow-(--shadow-1)",
+                        pinned && "ring-2 ring-warning/60",
+                      )}
+                    >
+                      {m.role === "ASSISTANT" ? (
+                        <p className="mb-1 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-ink-muted">
+                          {m.source === "AI" ? (
+                            <Bot className="size-3.5" aria-hidden />
+                          ) : (
+                            <ListChecks className="size-3.5" aria-hidden />
+                          )}
+                          {m.source === "AI" ? "AI coach" : "Curated answer"}
+                          {m.route && m.route !== "ANSWERED" ? (
+                            <span>· {COACH_ROUTE_NOTE[m.route]}</span>
+                          ) : null}
+                        </p>
+                      ) : null}
+                      {mine ? (
+                        <CoachMarkdown content={m.content} isAssistant={false} />
+                      ) : (
+                        <RevealedMarkdown
+                          content={m.content}
+                          animate={revealId === m.id}
+                          onDone={() => setRevealId((cur) => (cur === m.id ? null : cur))}
+                        />
+                      )}
+                      {m.role === "ASSISTANT" && settled && (
+                        <CoachActions
+                          content={m.content}
+                          onSendPrompt={(prompt) => send(prompt)}
+                          disabled={busy}
+                        />
+                      )}
+                      {m.role === "ASSISTANT" && settled && <CoachFeedback messageId={m.id} />}
+                      {m.role === "ASSISTANT" && settled && m.id === lastId && !busy && !filtering ? (
+                        <CoachFollowUps
+                          content={m.content}
+                          route={m.route}
+                          onAsk={(p) => send(p)}
+                          disabled={busy}
+                        />
+                      ) : null}
+                      <div
+                        className={cn(
+                          "mt-1.5 flex items-center gap-2 text-[11px]",
+                          mine ? "justify-end text-on-brand/70" : "text-ink-subtle",
+                        )}
+                      >
+                        <span>{messageTime(m.createdAt)}</span>
+                        {!m.id.startsWith("local-") ? (
+                          <button
+                            type="button"
+                            onClick={() => togglePin(m.id)}
+                            aria-pressed={pinned}
+                            aria-label={pinned ? "Unpin message" : "Pin message"}
+                            title={pinned ? "Unpin" : "Pin this message"}
+                            className="inline-flex items-center gap-0.5 rounded hover:text-current focus-visible:outline-2"
+                          >
+                            {pinned ? (
+                              <PinOff className="size-3" aria-hidden />
+                            ) : (
+                              <Pin className="size-3" aria-hidden />
+                            )}
+                            {pinned ? "Unpin" : "Pin"}
+                          </button>
+                        ) : null}
+                        {m.id === lastAssistantId && settled && !busy && !filtering ? (
+                          <button
+                            type="button"
+                            onClick={() => redo("regenerate")}
+                            className="inline-flex items-center gap-0.5 rounded hover:text-brand focus-visible:outline-2"
+                            title="Ask again for a fresh answer"
+                          >
+                            <RotateCcw className="size-3" aria-hidden /> Regenerate
+                          </button>
+                        ) : null}
+                        {m.id === lastUserId && !busy && !filtering && !m.id.startsWith("local-") ? (
+                          <button
+                            type="button"
+                            onClick={() => redo("edit")}
+                            className="inline-flex items-center gap-0.5 rounded hover:text-current focus-visible:outline-2"
+                            title="Edit and resend this question"
+                          >
+                            <Pencil className="size-3" aria-hidden /> Edit
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
 
           {busy ? (
             <div className="flex justify-start" aria-label="The coach is writing">
               <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-sm border border-hairline bg-raised px-4 py-3">
+                <span className="mr-1 text-body-sm text-ink-muted">Coach is thinking</span>
                 {[0, 150, 300].map((delay) => (
                   <span
                     key={delay}
@@ -558,6 +964,7 @@ export function CoachChat() {
           ) : null}
           <div className="flex items-end gap-2">
             <Textarea
+              ref={inputRef}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
@@ -574,9 +981,7 @@ export function CoachChat() {
               disabled={loading || !!loadError}
             />
             <CoachVoiceInput
-              onTranscript={(transcript) =>
-                setDraft((prev) => (prev ? `${prev} ${transcript}` : transcript))
-              }
+              onTranscript={(transcript) => setDraft((prev) => (prev ? `${prev} ${transcript}` : transcript))}
               disabled={loading || !!loadError || busy}
             />
             <Button
@@ -592,10 +997,12 @@ export function CoachChat() {
           </div>
           <div className="mt-1.5 flex items-center justify-between gap-2 text-body-sm text-ink-subtle">
             <div className="flex items-center gap-2">
-              <span>Enter to send · Shift + Enter for a new line</span>
+              <span className="hidden sm:inline">Enter to send · Shift + Enter for a new line</span>
               <CoachMemory />
             </div>
-            <span className="tabular">{draft.length}/500</span>
+            <span className={cn("tabular", draft.length >= 450 && "font-semibold text-warning")}>
+              {draft.length}/500
+            </span>
           </div>
         </form>
 

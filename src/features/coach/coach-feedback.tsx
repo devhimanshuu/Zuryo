@@ -21,7 +21,7 @@ export type CoachFeedbackProps = {
  * integration could POST these to a server endpoint for model tuning.
  */
 export function CoachFeedback({ messageId, className }: CoachFeedbackProps) {
-  const storageKey = `zuryo:coach-fb:${messageId}`;
+  const storageKey = `zuryofit:coach-fb:${messageId}`;
 
   const [rating, setRating] = useState<"positive" | "negative" | null>(() => {
     if (typeof window === "undefined") return null;
@@ -140,7 +140,7 @@ export function CoachFeedback({ messageId, className }: CoachFeedbackProps) {
       </div>
 
       {showTags && tags.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1 animate-fade-in">
+        <div className="mt-1.5 flex animate-fade-in flex-wrap gap-1">
           {tags.map((tag) => (
             <button
               key={tag}

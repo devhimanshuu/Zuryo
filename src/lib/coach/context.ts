@@ -45,7 +45,9 @@ export function coachContextToPrompt(c: CoachContext): string {
     `Exercises to avoid: ${cap(c.avoid, 200) ?? "none"}`,
     c.nextSession
       ? `Next session: ${c.nextSession.status === "IN_PROGRESS" ? "in progress now" : c.nextSession.when}, ${c.nextSession.category}${
-          c.nextSession.trainerFirstName ? ` with ${c.nextSession.trainerFirstName}` : ", trainer not yet assigned"
+          c.nextSession.trainerFirstName
+            ? ` with ${c.nextSession.trainerFirstName}`
+            : ", trainer not yet assigned"
         }`
       : "Next session: none booked",
     `Upcoming sessions booked: ${c.upcomingCount}`,

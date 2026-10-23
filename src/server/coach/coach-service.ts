@@ -4,6 +4,7 @@ import { ACTIVE_BOOKING_STATUSES } from "@/lib/booking/rules";
 import { categoryLabel } from "@/lib/booking/categories";
 import type { CoachContext } from "@/lib/coach/context";
 import { runCoach, type CoachModels, type CoachResult, type CoachTurn } from "@/lib/coach/graph";
+import { buildNudge, type CoachNudge } from "@/lib/coach/nudge";
 import { COACH_LIMITS } from "@/lib/coach/scope";
 import { generateSmartSuggestions, type SmartSuggestion } from "@/lib/coach/suggestions";
 import type { CoachMessageView } from "@/lib/coach/thread";
@@ -96,15 +97,54 @@ export async function getCoachThreadWithSuggestions(
   customerId: string,
   now: Date,
   limit = THREAD_LIMIT,
-): Promise<{ messages: CoachMessageView[]; suggestions: SmartSuggestion[] }> {
-  const [messages, context] = await Promise.all([
+): Promise<{ messages: CoachMessageView[]; suggestions: SmartSuggestion[]; nudge: CoachNudge | null }> {
+  const [messages, context, nudge] = await Promise.all([
     getCoachThread(db, customerId, limit),
     loadCoachContext(db, customerId, now),
+    loadCoachNudge(db, customerId, now),
   ]);
   return {
     messages,
     suggestions: generateSmartSuggestions(context),
+    nudge,
   };
+}
+
+/** The session-aware prompt for right now, from the customer's own bookings. */
+export async function loadCoachNudge(db: DbOrTx, customerId: string, now: Date): Promise<CoachNudge | null> {
+  const [next, finished] = await Promise.all([
+    db.booking.findFirst({
+      where: { customerId, status: { in: [...ACTIVE_BOOKING_STATUSES] }, endAt: { gte: now } },
+      orderBy: { startAt: "asc" },
+      select: {
+        startAt: true,
+        workoutCategory: true,
+        status: true,
+        trainer: { select: { user: { select: { name: true } } } },
+      },
+    }),
+    db.booking.findFirst({
+      where: {
+        customerId,
+        status: "COMPLETED",
+        endAt: { gte: new Date(now.getTime() - 24 * 3_600_000), lte: now },
+      },
+      orderBy: { endAt: "desc" },
+      select: { endAt: true, workoutCategory: true },
+    }),
+  ]);
+  return buildNudge({
+    upcoming: next
+      ? {
+          startAt: next.startAt,
+          category: categoryLabel(next.workoutCategory),
+          trainerFirstName: next.trainer ? firstName(next.trainer.user.name) : null,
+          status: next.status as "PENDING" | "CONFIRMED" | "IN_PROGRESS",
+        }
+      : null,
+    finished: finished ? { endAt: finished.endAt, category: categoryLabel(finished.workoutCategory) } : null,
+    now,
+  });
 }
 
 /**
@@ -218,6 +258,7 @@ const askSchema = z
       .trim()
       .min(2, "Write a short question.")
       .max(COACH_LIMITS.messageChars, `Keep questions under ${COACH_LIMITS.messageChars} characters.`),
+    language: z.enum(["en", "hi"]).optional(),
   })
   .strict();
 
@@ -237,6 +278,7 @@ export async function askCoach(
     return fail("VALIDATION", `Write a question between 2 and ${COACH_LIMITS.messageChars} characters.`);
   }
   const question = parsed.data.message;
+  const language = parsed.data.language ?? "en";
   const now = deps.now();
 
   const context = await loadCoachContext(deps.db, actor.userId, now);
@@ -282,7 +324,10 @@ export async function askCoach(
   const started = Date.now();
   let result: CoachResult;
   try {
-    result = await runCoach({ models: deps.models, loadContext: async () => context }, { question, history });
+    result = await runCoach(
+      { models: deps.models, loadContext: async () => context },
+      { question, history, language },
+    );
   } catch (err) {
     // The attempt produced nothing: record the failure honestly and let the caller report it.
     try {
@@ -369,4 +414,30 @@ export async function clearCoachHistory(
   if (actor.role !== "CUSTOMER") return fail("FORBIDDEN", "Only customers can clear their own conversation.");
   const res = await deps.db.chatMessage.deleteMany({ where: { customerId: actor.userId } });
   return ok({ deleted: res.count });
+}
+
+/**
+ * Takes back the latest turn so it can be regenerated or edited: removes the newest coach reply
+ * and the question it answered (or just a trailing question that never got an answer) and returns
+ * that question's text. Only the acting customer's own rows are touched.
+ */
+export async function undoLastCoachTurn(
+  deps: BookingDeps,
+  actor: Actor,
+): Promise<ServiceResult<{ question: string }>> {
+  if (actor.role !== "CUSTOMER")
+    return fail("FORBIDDEN", "Only customers can change their own conversation.");
+  const lastTwo = await deps.db.chatMessage.findMany({
+    where: { customerId: actor.userId },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: 2,
+    select: { id: true, role: true, content: true },
+  });
+  const [latest, before] = lastTwo;
+  if (!latest) return fail("NOT_FOUND", "There's nothing to redo yet.");
+  const question = latest.role === "USER" ? latest : before?.role === "USER" ? before : null;
+  if (!question) return fail("NOT_FOUND", "There's no question to redo.");
+  const ids = latest.role === "USER" ? [latest.id] : [latest.id, question.id];
+  await deps.db.chatMessage.deleteMany({ where: { customerId: actor.userId, id: { in: ids } } });
+  return ok({ question: question.content });
 }

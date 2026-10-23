@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils/cn";
 
-const MEMORY_KEY = "zuryo:coach-memories";
+const MEMORY_KEY = "zuryofit:coach-memories";
 const MAX_MEMORIES = 20;
 const MAX_LENGTH = 200;
 
@@ -105,7 +105,7 @@ export function CoachMemory({ className }: CoachMemoryProps) {
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-md border border-hairline bg-raised px-2.5 py-1 text-xs font-semibold text-ink-muted hover:border-brand hover:bg-brand-soft hover:text-brand transition-colors",
+          "inline-flex items-center gap-1.5 rounded-md border border-hairline bg-raised px-2.5 py-1 text-xs font-semibold text-ink-muted transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand",
           className,
         )}
         title="Coach Memory — things you've told the coach to remember"
@@ -113,7 +113,7 @@ export function CoachMemory({ className }: CoachMemoryProps) {
         <Brain className="size-3" />
         Memory
         {items.length > 0 && (
-          <span className="rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-bold text-on-brand leading-none">
+          <span className="rounded-full bg-brand px-1.5 py-0.5 text-[10px] leading-none font-bold text-on-brand">
             {items.length}
           </span>
         )}
@@ -122,8 +122,13 @@ export function CoachMemory({ className }: CoachMemoryProps) {
   }
 
   return (
-    <div className={cn("rounded-lg border border-hairline bg-raised p-3 shadow-(--shadow-2) animate-fade-in", className)}>
-      <div className="flex items-center justify-between gap-2 border-b border-hairline/60 pb-2 mb-2">
+    <div
+      className={cn(
+        "animate-fade-in rounded-lg border border-hairline bg-raised p-3 shadow-(--shadow-2)",
+        className,
+      )}
+    >
+      <div className="mb-2 flex items-center justify-between gap-2 border-b border-hairline/60 pb-2">
         <h3 className="flex items-center gap-1.5 text-xs font-bold text-ink">
           <Brain className="size-3.5 text-brand" />
           Coach Memory
@@ -138,13 +143,13 @@ export function CoachMemory({ className }: CoachMemoryProps) {
         </button>
       </div>
 
-      <p className="text-[11px] text-ink-muted mb-2">
-        Tell the coach facts it should always remember, like your gym equipment or schedule
-        preferences. These stay on your device.
+      <p className="mb-2 text-[11px] text-ink-muted">
+        Tell the coach facts it should always remember, like your gym equipment or schedule preferences. These
+        stay on your device.
       </p>
 
       {/* Add form */}
-      <div className="flex gap-1.5 mb-2">
+      <div className="mb-2 flex gap-1.5">
         <Input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -156,7 +161,7 @@ export function CoachMemory({ className }: CoachMemoryProps) {
           }}
           placeholder="e.g. My gym only has dumbbells up to 10kg"
           maxLength={MAX_LENGTH}
-          className="text-xs h-8"
+          className="h-8 text-xs"
           aria-label="Add a memory for the coach"
         />
         <Button
@@ -165,7 +170,7 @@ export function CoachMemory({ className }: CoachMemoryProps) {
           size="sm"
           onClick={addMemory}
           disabled={draft.trim().length < 3}
-          className="h-8 px-2 shrink-0"
+          className="h-8 shrink-0 px-2"
         >
           <Plus className="size-3" />
         </Button>
@@ -173,11 +178,9 @@ export function CoachMemory({ className }: CoachMemoryProps) {
 
       {/* Memories list */}
       {items.length === 0 ? (
-        <p className="py-2 text-center text-[11px] text-ink-subtle">
-          No memories yet. Add one above!
-        </p>
+        <p className="py-2 text-center text-[11px] text-ink-subtle">No memories yet. Add one above!</p>
       ) : (
-        <ul className="grid gap-1 max-h-40 overflow-y-auto">
+        <ul className="grid max-h-40 gap-1 overflow-y-auto">
           {items.map((m) => (
             <li
               key={m.id}
@@ -200,7 +203,9 @@ export function CoachMemory({ className }: CoachMemoryProps) {
 
       {items.length > 0 && (
         <div className="mt-2 flex items-center justify-between border-t border-hairline/60 pt-1.5">
-          <span className="text-[10px] text-ink-subtle">{items.length}/{MAX_MEMORIES} notes · stored on your device</span>
+          <span className="text-[10px] text-ink-subtle">
+            {items.length}/{MAX_MEMORIES} notes · stored on your device
+          </span>
           <button
             type="button"
             onClick={clearAll}

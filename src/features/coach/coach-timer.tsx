@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils/cn";
 /** Plays a gentle 2-tone pleasant chime using standard Web Audio API */
 function playTimerChime() {
   try {
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
     const osc = ctx.createOscillator();
@@ -122,7 +124,7 @@ export function CoachTimer({
           <Clock className="size-3.5 text-brand" aria-hidden />
           <span>{label}</span>
           {finished && (
-            <span className="inline-flex items-center gap-0.5 rounded-full bg-success px-1.5 py-0.2 text-[10px] font-bold text-on-brand">
+            <span className="py-0.2 inline-flex items-center gap-0.5 rounded-full bg-success px-1.5 text-[10px] font-bold text-on-brand">
               <Check className="size-2.5" /> Done
             </span>
           )}
@@ -140,9 +142,7 @@ export function CoachTimer({
       </div>
 
       <div className="my-2.5 flex items-center justify-between gap-3">
-        <div className="font-mono text-2xl font-bold tracking-tight text-ink">
-          {formatSeconds(remaining)}
-        </div>
+        <div className="font-mono text-2xl font-bold tracking-tight text-ink">{formatSeconds(remaining)}</div>
 
         <div className="flex items-center gap-1.5">
           <Button
