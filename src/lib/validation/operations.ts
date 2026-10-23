@@ -30,3 +30,5 @@ export const operationsCancelBookingInputSchema = z
   .strict();
 
 export const operationsBookingQuerySchema = z.object({ bookingId: id }).strict();
+
+export const operationsTrainerQuerySchema = z.object({ trainerId: id }).strict();

@@ -5,6 +5,7 @@ import { Pagination } from "@/components/shared/pagination";
 import { Avatar } from "@/components/shared/avatar";
 import { EmptyState, ErrorState } from "@/components/shared/states";
 import { OperationsFilterShell } from "@/features/operations/filter-shell";
+import { OperationsTrainerSheet } from "@/features/operations/trainer-sheet";
 import { describeTravel, estimateTravel, toLatLng } from "@/lib/location/travel";
 import { normalizeQuery, parseTrainerActive, parseTrainerSort } from "@/lib/operations-filters";
 import { parsePage } from "@/lib/pagination";
@@ -122,10 +123,13 @@ export default async function OperationsTrainersPage({
                       </li>
                     ))}
                   </ul>
-                  <p className="mt-3 border-t border-hairline pt-3 text-body-sm">
-                    <span className="font-semibold tabular">{t._count.bookings}</span> upcoming session
-                    {t._count.bookings === 1 ? "" : "s"}
-                  </p>
+                  <div className="mt-3 flex items-center justify-between gap-2 border-t border-hairline pt-3">
+                    <p className="text-body-sm">
+                      <span className="font-semibold tabular">{t._count.bookings}</span> upcoming session
+                      {t._count.bookings === 1 ? "" : "s"}
+                    </p>
+                    <OperationsTrainerSheet trainerId={t.userId} name={t.user.name} />
+                  </div>
                 </div>
               </li>
             );

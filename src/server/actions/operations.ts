@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { operationsBookingQuerySchema, operationsCancelBookingInputSchema } from "@/lib/validation/operations";
+import { operationsBookingQuerySchema, operationsCancelBookingInputSchema, operationsTrainerQuerySchema } from "@/lib/validation/operations";
 import { getActor } from "@/server/auth/actor";
 import { cancelBooking, type CancelledBooking } from "@/server/booking/booking-service";
 import { defaultDeps } from "@/server/booking/deps";
@@ -9,6 +9,7 @@ import { fail, type ServiceResult } from "@/server/booking/errors";
 import { reassignBooking, type ReassignedBooking } from "@/server/booking/operations-booking-service";
 import { updatePricing } from "@/server/booking/pricing-service";
 import { getOperationsBookingDetail, type OperationsBookingDetail } from "@/server/queries/operations-booking-detail";
+import { getOperationsTrainerDetail, type OperationsTrainerDetail } from "@/server/queries/operations-trainer-detail";
 import { reconcileDueSessions } from "@/server/sessions/session-service";
 import { runAction } from "./run";
 
@@ -29,6 +30,19 @@ export async function getOperationsBookingDetailAction(
     if (!parsed.success) return fail("VALIDATION", "Choose a booking to inspect.");
     const detail = await getOperationsBookingDetail(parsed.data.bookingId);
     if (!detail) return fail("NOT_FOUND", "We couldn't find that booking.");
+    return { ok: true, data: detail };
+  });
+}
+
+export async function getOperationsTrainerDetailAction(
+  trainerId: unknown,
+): Promise<ServiceResult<OperationsTrainerDetail>> {
+  return runAction("operations-trainer:detail", async () => {
+    await getActor("OPERATIONS");
+    const parsed = operationsTrainerQuerySchema.safeParse({ trainerId });
+    if (!parsed.success) return fail("VALIDATION", "Choose a trainer to inspect.");
+    const detail = await getOperationsTrainerDetail(parsed.data.trainerId);
+    if (!detail) return fail("NOT_FOUND", "We couldn't find that trainer.");
     return { ok: true, data: detail };
   });
 }
