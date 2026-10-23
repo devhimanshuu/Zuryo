@@ -35,7 +35,7 @@ export function MarketingHeader() {
             <ThemeControl />
           </div>
           <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-            <Link href="/sign-in">Sign in</Link>
+            <Link href="/sign-up">Sign up</Link>
           </Button>
           <Button asChild variant="primary" size="sm" className="group">
             <Link href="/customer/bookings/new">

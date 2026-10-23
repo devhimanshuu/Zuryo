@@ -60,9 +60,10 @@ export function AppShell({
           <span className="ml-auto flex items-center gap-1">
             <CommandTrigger variant="icon" />
             <ThemeControl />
-            <span className="pr-2" title={accountName}>
+            <Link href={`${home}/account`} className="pr-2" title={`${accountName} — profile & settings`}>
               <Avatar name={accountName} size="sm" />
-            </span>
+              <span className="sr-only">Profile and settings</span>
+            </Link>
           </span>
         </header>
         <main
@@ -146,9 +147,14 @@ function SidebarContent({
         <div className={HIDE_COLLAPSED}>
           <AccountPanel role={role} name={accountName} />
         </div>
-        <div className="hidden justify-center lg:group-data-[collapsed=true]/shell:flex" title={accountName}>
+        <Link
+          href={`${ROLE_HOME[role]}/account`}
+          className="hidden justify-center lg:group-data-[collapsed=true]/shell:flex"
+          title={`${accountName} — profile & settings`}
+        >
           <Avatar name={accountName} />
-        </div>
+          <span className="sr-only">Profile and settings</span>
+        </Link>
       </div>
     </>
   );

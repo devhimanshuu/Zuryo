@@ -9,6 +9,9 @@ declare module "next-auth" {
       role: Role;
       /** True for a Google sign-in that hasn't picked a role yet (no account exists). */
       pending?: boolean;
+      /** When this session last proved who it belongs to (epoch ms), and how. */
+      authAt?: number;
+      authMethod?: "password" | "google";
     } & DefaultSession["user"];
   }
 
@@ -22,5 +25,7 @@ declare module "next-auth/jwt" {
     userId?: string;
     role?: Role;
     pending?: boolean;
+    authAt?: number;
+    authMethod?: "password" | "google";
   }
 }

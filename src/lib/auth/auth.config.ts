@@ -34,6 +34,8 @@ export const authConfig = {
       session.user.id = token.userId as string;
       session.user.role = token.role as Role;
       session.user.pending = token.pending === true;
+      session.user.authAt = token.authAt as number | undefined;
+      session.user.authMethod = token.authMethod as "password" | "google" | undefined;
       return session;
     },
     /**

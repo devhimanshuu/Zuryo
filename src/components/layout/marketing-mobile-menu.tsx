@@ -56,8 +56,8 @@ export function MarketingMobileMenu({ links }: { links: { href: string; label: s
             </Link>
           </Button>
           <Button asChild variant="secondary" size="lg">
-            <Link href="/sign-in" onClick={close}>
-              Sign in
+            <Link href="/sign-up" onClick={close}>
+              Sign up
             </Link>
           </Button>
         </div>

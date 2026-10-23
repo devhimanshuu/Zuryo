@@ -396,7 +396,10 @@ export function CoachChat() {
           ) : messages.length === 0 ? (
             <div className="grid gap-4">
               <div className="grid justify-items-center gap-2 pt-2 text-center">
-                <span className="grid size-12 place-items-center rounded-full bg-brand-soft text-brand" aria-hidden>
+                <span
+                  className="grid size-12 place-items-center rounded-full bg-brand-soft text-brand"
+                  aria-hidden
+                >
                   <MessageCircle className="size-6" />
                 </span>
                 <p className="text-heading-md font-semibold">Ask your coach</p>
@@ -515,7 +518,7 @@ export function CoachChat() {
 
         {confirmClear ? (
           <div
-            className="absolute inset-0 z-10 grid place-items-center bg-inverse/40 p-5 animate-fade-in"
+            className="absolute inset-0 z-10 grid animate-fade-in place-items-center bg-inverse/40 p-5"
             onClick={() => setConfirmClear(false)}
           >
             <div
@@ -526,7 +529,10 @@ export function CoachChat() {
               className="w-full max-w-[19rem] rounded-lg border border-hairline bg-raised p-5 shadow-(--shadow-3)"
               onClick={(e) => e.stopPropagation()}
             >
-              <span className="grid size-10 place-items-center rounded-full bg-danger/10 text-danger" aria-hidden>
+              <span
+                className="grid size-10 place-items-center rounded-full bg-danger/10 text-danger"
+                aria-hidden
+              >
                 <Trash2 className="size-5" />
               </span>
               <h3 id="coach-clear-title" className="mt-3 text-heading-md font-semibold">
@@ -536,7 +542,13 @@ export function CoachChat() {
                 This permanently deletes your whole chat with the coach. It can&apos;t be undone.
               </p>
               <div className="mt-4 flex justify-end gap-2">
-                <Button type="button" variant="secondary" size="sm" autoFocus onClick={() => setConfirmClear(false)}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  autoFocus
+                  onClick={() => setConfirmClear(false)}
+                >
                   Cancel
                 </Button>
                 <Button type="button" variant="danger" size="sm" onClick={clear} loading={clearing}>

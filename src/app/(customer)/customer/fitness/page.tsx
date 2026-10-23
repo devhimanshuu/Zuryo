@@ -214,7 +214,9 @@ export default async function FitnessPage({
                     {stats.categories.map((c) => (
                       <li key={c.category} className="grid gap-1">
                         <p className="flex justify-between text-body-sm">
-                          <span className="font-semibold">{categoryLabel(c.category as WorkoutCategory)}</span>
+                          <span className="font-semibold">
+                            {categoryLabel(c.category as WorkoutCategory)}
+                          </span>
                           <span className="text-ink-muted tabular">{c.count}</span>
                         </p>
                         <span className="h-1.5 overflow-hidden rounded-full bg-sunken">
@@ -285,7 +287,10 @@ export default async function FitnessPage({
                 {activeGoals.length === 0 ? (
                   <p className="text-ink-muted">
                     No goals selected yet.{" "}
-                    <Link href="/customer/fitness?tab=profile" className="font-semibold text-brand hover:underline">
+                    <Link
+                      href="/customer/fitness?tab=profile"
+                      className="font-semibold text-brand hover:underline"
+                    >
                       Add some
                     </Link>
                     .
@@ -299,7 +304,9 @@ export default async function FitnessPage({
                         <li key={g} className="rounded-md border border-hairline bg-surface px-3 py-2.5">
                           <div className="flex items-center justify-between gap-2">
                             <p className="font-semibold">{GOAL_LABELS[g]}</p>
-                            <span className={cn("text-xs font-semibold", done ? "text-success" : "text-brand")}>
+                            <span
+                              className={cn("text-xs font-semibold", done ? "text-success" : "text-brand")}
+                            >
                               {done ? "Completed" : "Active"}
                             </span>
                           </div>

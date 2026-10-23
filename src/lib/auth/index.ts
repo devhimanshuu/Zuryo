@@ -69,11 +69,26 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
           if (googleLogin && profile?.name) token.name = profile.name;
           token.pending = true;
         }
+        // A real Google round trip (not a refresh) is what proves the session is fresh.
+        if (googleLogin) {
+          token.authAt = Date.now();
+          token.authMethod = "google";
+        }
         return token;
       }
       if (user) {
         token.userId = user.id as string;
         token.role = (user as { role?: typeof token.role }).role;
+        token.authAt = Date.now();
+        token.authMethod = "password";
+      }
+      // Profile edits refresh the name shown in the shell.
+      if (trigger === "update" && token.userId && !token.pending) {
+        const current = await getDb().user.findUnique({
+          where: { id: token.userId as string },
+          select: { name: true },
+        });
+        if (current) token.name = current.name;
       }
       return token;
     },

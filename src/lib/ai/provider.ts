@@ -66,7 +66,8 @@ export const DEFAULT_ANTHROPIC_MODEL = "claude-haiku-5-5";
  * their availability changes; set OPENROUTER_MODEL to a paid model (e.g.
  * "google/gemini-2.5-flash-lite") for production traffic. A comma-separated value is a fallback list.
  */
-export const DEFAULT_OPENROUTER_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free,recursive/flint-v1.0:free,poolside/laguna-s-2.1:free,google/gemma-4-31b-it:free,openrouter/free";
+export const DEFAULT_OPENROUTER_MODEL =
+  "nvidia/nemotron-3-ultra-550b-a55b:free,recursive/flint-v1.0:free,poolside/laguna-s-2.1:free,google/gemma-4-31b-it:free,openrouter/free";
 const TOOL_NAME = "submit_workout_plan";
 const TOOL_DESCRIPTION = "Submit the complete structured workout plan.";
 

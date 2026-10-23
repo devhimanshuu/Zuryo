@@ -27,7 +27,13 @@ export function MarketingFooter() {
             { href: "/sign-in", label: "Operations workspace" },
           ]}
         />
-        <FooterCol title="Account" links={[{ href: "/sign-in", label: "Sign in" }]} />
+        <FooterCol
+          title="Account"
+          links={[
+            { href: "/sign-in", label: "Sign in" },
+            { href: "/sign-up", label: "Sign up" },
+          ]}
+        />
       </div>
       <div className="container-page flex flex-wrap justify-between gap-2 border-t border-ink-inverse/15 py-5 text-body-sm text-ink-inverse/70">
         <p>© {new Date().getFullYear()} Zuryo. A product demo with synthetic data.</p>

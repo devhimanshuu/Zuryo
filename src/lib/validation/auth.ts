@@ -14,34 +14,44 @@ const optionalText = (max: number, message: string) =>
     .optional()
     .or(z.literal("").transform(() => undefined));
 
+export const newPasswordSchema = z
+  .string()
+  .min(PASSWORD_RULES.min, `Use at least ${PASSWORD_RULES.min} characters`)
+  .max(PASSWORD_RULES.max, `Use at most ${PASSWORD_RULES.max} characters`)
+  .regex(/[A-Za-z]/, "Include at least one letter")
+  .regex(/[0-9]/, "Include at least one number");
+
+export const nameSchema = z
+  .string()
+  .trim()
+  .min(2, "Enter your full name")
+  .max(80, "Name must be under 80 characters");
+
 const identity = {
-  name: z.string().trim().min(2, "Enter your full name").max(80, "Name must be under 80 characters"),
+  name: nameSchema,
   email: z
     .string()
     .trim()
     .toLowerCase()
     .max(254, "Email is too long")
     .pipe(z.email("Enter a valid email address")),
-  password: z
-    .string()
-    .min(PASSWORD_RULES.min, `Use at least ${PASSWORD_RULES.min} characters`)
-    .max(PASSWORD_RULES.max, `Use at most ${PASSWORD_RULES.max} characters`)
-    .regex(/[A-Za-z]/, "Include at least one letter")
-    .regex(/[0-9]/, "Include at least one number"),
+  password: newPasswordSchema,
 };
+
+export const phoneSchema = z
+  .string()
+  .trim()
+  .regex(/^\+?[0-9 ()-]{10,16}$/, "Enter a valid phone number")
+  .optional()
+  .or(z.literal("").transform(() => undefined));
 
 /** Fields every new account needs beyond who they are. */
 const placement = {
-  phone: z
-    .string()
-    .trim()
-    .regex(/^\+?[0-9 ()-]{10,16}$/, "Enter a valid phone number")
-    .optional()
-    .or(z.literal("").transform(() => undefined)),
+  phone: phoneSchema,
   serviceZoneId: z.string().min(1, "Choose your community"),
 };
 
-const trainerExtras = {
+export const trainerExtras = {
   workoutCategories: z
     .array(z.enum(WORKOUT_CATEGORIES))
     .min(1, "Pick at least one workout type")

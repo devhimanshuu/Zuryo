@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  CalendarClock,
-  Download,
-  Hourglass,
-  Search,
-  Zap,
-  type LucideIcon,
-} from "lucide-react";
+import { CalendarClock, Download, Hourglass, Search, Zap, type LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -172,7 +165,12 @@ export function CommandPalette({ role }: { role: Role }) {
             Esc
           </kbd>
         </div>
-        <div id="command-results" role="listbox" aria-label="Results" className="max-h-[min(60vh,26rem)] overflow-y-auto p-2">
+        <div
+          id="command-results"
+          role="listbox"
+          aria-label="Results"
+          className="max-h-[min(60vh,26rem)] overflow-y-auto p-2"
+        >
           {filtered.length === 0 ? (
             <p className="px-3 py-8 text-center text-body-sm text-ink-muted">
               Nothing matches “{query.trim()}”. Try “bookings” or “availability”.

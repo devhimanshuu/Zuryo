@@ -24,21 +24,24 @@ const GoogleMark = () => (
 
 /**
  * "Continue with Google". Every Google round trip returns to /sign-up/complete: existing accounts
- * are forwarded to their workspace from there, new people finish registering.
+ * are forwarded to their workspace (or to `callbackUrl`) from there, new people finish registering.
  */
 export function GoogleButton({
   callbackUrl,
   label = "Continue with Google",
+  reauth = false,
 }: {
   callbackUrl?: string;
   label?: string;
+  /** Re-verify the current person: Google must ask for their login again, and no divider is drawn. */
+  reauth?: boolean;
 }) {
   const [pending, setPending] = useState(false);
   const target = callbackUrl
     ? `/sign-up/complete?next=${encodeURIComponent(callbackUrl)}`
     : "/sign-up/complete";
   return (
-    <div className="mb-5 grid gap-4">
+    <div className={reauth ? "grid gap-4" : "mb-5 grid gap-4"}>
       <Button
         type="button"
         variant="secondary"
@@ -46,17 +49,19 @@ export function GoogleButton({
         loading={pending}
         onClick={() => {
           setPending(true);
-          void signIn("google", { callbackUrl: target });
+          void signIn("google", { callbackUrl: target }, reauth ? { prompt: "login" } : undefined);
         }}
       >
         {pending ? null : <GoogleMark />}
         {label}
       </Button>
-      <p className="flex items-center gap-3 text-body-sm text-ink-subtle" aria-hidden>
-        <span className="h-px flex-1 bg-hairline" />
-        or use your email
-        <span className="h-px flex-1 bg-hairline" />
-      </p>
+      {reauth ? null : (
+        <p className="flex items-center gap-3 text-body-sm text-ink-subtle" aria-hidden>
+          <span className="h-px flex-1 bg-hairline" />
+          or use your email
+          <span className="h-px flex-1 bg-hairline" />
+        </p>
+      )}
     </div>
   );
 }
