@@ -1,4 +1,4 @@
-# Zuryo
+# ZuryoFit
 
 On-demand personal training for residential communities. Customers book a 60-minute session with a
 trainer in their community, **instantly** (starting within the hour) or **scheduled** for later.
