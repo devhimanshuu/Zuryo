@@ -14,7 +14,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 describe("server environment", () => {
   it("treats the empty placeholders from .env.example as unset", async () => {
-    const get = await parse({ DATABASE_URL: DB, DIRECT_URL: "", CRON_SECRET: "", OPENROUTER_MODEL: "", ANTHROPIC_MODEL: "" });
+    const get = await parse({ DATABASE_URL: DB, DIRECT_URL: "", CRON_SECRET: "", OPENROUTER_MODEL: "" });
     const env = get();
     expect(env.CRON_SECRET).toBeUndefined();
     expect(env.OPENROUTER_MODEL).toBeUndefined();

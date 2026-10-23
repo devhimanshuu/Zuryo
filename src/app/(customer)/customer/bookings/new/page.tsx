@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState } from "@/components/shared/states";
 import { BookingWizard } from "@/features/bookings/wizard/booking-wizard";
 import { safely } from "@/lib/utils/errors";
-import { bookingModeSchema, workoutCategorySchema } from "@/lib/validation/enums";
+import { bookingModeSchema } from "@/lib/validation/enums";
 import { getDb } from "@/lib/db";
 import { getActor } from "@/server/auth/actor";
 import { getRedeemablePackages } from "@/server/packages/package-service";
@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: "Book a session" };
 export default async function NewBookingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mode?: string; category?: string }>;
+  searchParams: Promise<{ mode?: string }>;
 }) {
   const actor = await getActor("CUSTOMER");
   const result = await safely(async () => {
@@ -33,11 +33,8 @@ export default async function NewBookingPage({
       />
     );
   }
-  const { mode, category } = await searchParams;
+  const { mode } = await searchParams;
   const initialMode = bookingModeSchema.safeParse(mode?.toUpperCase()).data ?? null;
-  // A recommendation's "book this" link carries the category; anything invalid is simply ignored
-  // and the customer picks as usual. The wizard and the booking service validate again.
-  const initialCategory = workoutCategorySchema.safeParse(category?.toUpperCase()).data ?? null;
   const { customer, categories, packages } = result.data;
 
   return (
@@ -58,7 +55,6 @@ export default async function NewBookingPage({
         categories={categories}
         packages={packages}
         initialMode={initialMode}
-        initialCategory={initialCategory}
       />
     </div>
   );

@@ -106,7 +106,7 @@ export function FitnessProfileForm({ defaults }: { defaults: FitnessProfileDefau
         return;
       }
       toast.success("Profile saved", {
-        description: "Recommendations will use these preferences from now on.",
+        description: "Your trainers and coach will use these preferences from now on.",
       });
       router.refresh();
     } catch {
@@ -121,7 +121,7 @@ export function FitnessProfileForm({ defaults }: { defaults: FitnessProfileDefau
       <fieldset className="grid gap-4 rounded-lg border border-hairline bg-raised p-5">
         <legend className="px-1 font-semibold">About you</legend>
         <p className="text-body-sm text-ink-muted">
-          Optional. Age helps keep recommendations appropriately conservative; weight is for your own
+          Optional. Age helps keep suggestions appropriately conservative; weight is for your own
           progress record and is never sent to the AI provider.
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -231,7 +231,7 @@ export function FitnessProfileForm({ defaults }: { defaults: FitnessProfileDefau
         <fieldset className="grid content-start gap-3 rounded-lg border border-hairline bg-raised p-5">
           <legend className="px-1 font-semibold">Equipment you have</legend>
           <p className="text-body-sm text-ink-muted">
-            Optional. Recommendations only use equipment you list here.
+            Optional. Your trainers see the equipment you list here.
           </p>
           <Controller
             control={form.control}
@@ -269,7 +269,7 @@ export function FitnessProfileForm({ defaults }: { defaults: FitnessProfileDefau
       <fieldset className="grid gap-4 rounded-lg border border-hairline bg-raised p-5">
         <legend className="px-1 font-semibold">Your goals</legend>
         <p className="text-body-sm text-ink-muted">
-          Pick up to four. Add an optional target for each — recommendations and the trainer view use these.
+          Pick up to four. Add an optional target for each — your trainers and coach use these.
         </p>
         <Controller
           control={form.control}
@@ -384,7 +384,7 @@ export function FitnessProfileForm({ defaults }: { defaults: FitnessProfileDefau
       ) : null}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-xl text-body-sm text-ink-muted">
-          Saved to your profile and used for recommendations. Only you and the trainers you book with can see this.
+          Saved to your profile. Only you and the trainers you book with can see this.
         </p>
         <Button type="submit" variant="primary" loading={form.formState.isSubmitting}>
           Save profile

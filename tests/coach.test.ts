@@ -29,7 +29,6 @@ const ctx: CoachContext = {
   recentSessions: [
     { date: "Mon, 19 Oct", category: "Cardio", trainerSuggestion: "Lower-body strength next" },
   ],
-  latestPlan: null,
 };
 
 /** A fake chat model: answers from a list, or throws the given error; records what it was sent. */
@@ -173,7 +172,7 @@ describe("coach graph routing", () => {
 });
 
 describe("coach provider selection", () => {
-  it("uses both free providers by default, only the selected vendor when forced, and none for Anthropic", () => {
+  it("uses both free providers by default, and only the selected vendor when forced", () => {
     const ids = (models: ReturnType<typeof coachModelsFromEnv>) => [
       ...models.classifiers.map((m) => m.id),
       ...models.answerers.map((m) => m.id),
@@ -192,9 +191,6 @@ describe("coach provider selection", () => {
         coachModelsFromEnv({ AI_PROVIDER: "openrouter", GROQ_API_KEY: "g", OPENROUTER_API_KEY: "o" }),
       ).every((id) => id.startsWith("openrouter:")),
     ).toBe(true);
-    expect(
-      ids(coachModelsFromEnv({ AI_PROVIDER: "anthropic", GROQ_API_KEY: "g", OPENROUTER_API_KEY: "o" })),
-    ).toEqual([]);
     expect(ids(coachModelsFromEnv({}))).toEqual([]);
   });
 });

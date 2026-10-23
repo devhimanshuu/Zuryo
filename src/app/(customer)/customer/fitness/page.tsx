@@ -6,8 +6,6 @@ import {
   History,
   LayoutDashboard,
   Settings2,
-  Sparkles,
-  Tag,
   Target,
   TrendingUp,
   UserRound,
@@ -17,17 +15,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { AnimatedNumber } from "@/components/shared/animated-number";
-import { Pagination } from "@/components/shared/pagination";
 import { EmptyState, ErrorState } from "@/components/shared/states";
 import { Card, CardContent, CardHeader, CardIcon, CardTitle } from "@/components/ui/card";
 import { FitnessProfileForm } from "@/features/fitness/profile-form";
-import { GenerateRecommendationButton } from "@/features/fitness/generate-button";
-import { RecommendationCard } from "@/features/fitness/recommendation-card";
 import { WeeklyActivity } from "@/features/fitness/weekly-activity";
 import { currentStreak, weeksOfActivity } from "@/lib/activity";
 import { categoryLabel } from "@/lib/booking/categories";
 import { localDateKey } from "@/lib/booking/time";
-import { recommendationOutputSchema } from "@/lib/fitness/recommendation-schema";
 import {
   EQUIPMENT_LABELS,
   ENVIRONMENT_LABELS,
@@ -35,7 +29,6 @@ import {
   INTENSITY_LABELS,
   PREFERENCE_LABELS,
 } from "@/lib/fitness/labels";
-import { parsePage } from "@/lib/pagination";
 import { cn } from "@/lib/utils/cn";
 import { safely } from "@/lib/utils/errors";
 import { DEFAULT_TZ, formatDay, formatSlot, titleCase } from "@/lib/utils/format";
@@ -47,10 +40,9 @@ import { getFitnessDashboard } from "@/server/fitness/fitness-service";
 
 export const metadata: Metadata = { title: "Fitness" };
 
-type TabKey = "overview" | "workouts" | "history" | "profile";
+type TabKey = "overview" | "history" | "profile";
 const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
-  { key: "workouts", label: "Workouts", icon: Sparkles },
   { key: "history", label: "History", icon: History },
   { key: "profile", label: "Profile", icon: Settings2 },
 ];
@@ -62,18 +54,13 @@ function describe(a: SessionActivity) {
   return parts.filter(Boolean).join(" · ");
 }
 
-export default async function FitnessPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ page?: string; tab?: string }>;
-}) {
+export default async function FitnessPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const actor = await getActor("CUSTOMER");
-  const { page: rawPage, tab: rawTab } = await searchParams;
+  const { tab: rawTab } = await searchParams;
   const tab: TabKey = TABS.some((t) => t.key === rawTab) ? (rawTab as TabKey) : "overview";
-  const page = parsePage(rawPage);
-  const result = await safely(() => getFitnessDashboard(getDb(), actor.userId, new Date(), page));
+  const result = await safely(() => getFitnessDashboard(getDb(), actor.userId, new Date()));
   if (!result.ok) return <ErrorState message={result.error.message} />;
-  const { profile, goals, recommendations, recommendationPage, stats, sessions, activityDates } = result.data;
+  const { profile, goals, stats, sessions, activityDates } = result.data;
 
   const todayKey = localDateKey(new Date(), DEFAULT_TZ);
   const weeks = weeksOfActivity(activityDates, todayKey, DEFAULT_TZ, 12);
@@ -82,29 +69,6 @@ export default async function FitnessPage({
   const activeGoals = (profile?.fitnessGoals ?? []) as FitnessGoal[];
   const goalDetail = new Map(goals.map((g) => [g.goal, g]));
   const maxCategory = Math.max(1, ...stats.categories.map((c) => c.count));
-  const cards = recommendations
-    .map((r) => {
-      const payload = recommendationOutputSchema.safeParse(r.payload);
-      return payload.success
-        ? {
-            id: r.id,
-            source: r.source,
-            status: r.status,
-            title: r.title,
-            explanation: r.explanation,
-            category: r.category,
-            durationMinutes: r.durationMinutes,
-            intensity: r.intensity,
-            modelId: r.modelId,
-            feedback: r.feedback,
-            feedbackNote: r.feedbackNote,
-            createdAt: r.createdAt.toISOString(),
-            payload: payload.data,
-          }
-        : null;
-    })
-    .filter((c) => c !== null);
-
   const chips = [
     profile?.fitnessLevel ? titleCase(profile.fitnessLevel) : null,
     profile?.intensity ? `${INTENSITY_LABELS[profile.intensity]} intensity` : null,
@@ -117,7 +81,7 @@ export default async function FitnessPage({
       <PageHeader
         editorial
         title="Fitness"
-        description="Your progress, goals and workouts in one place."
+        description="Your progress, goals and session history in one place."
         className="pb-0"
       />
 
@@ -147,7 +111,7 @@ export default async function FitnessPage({
               </ul>
             ) : (
               <p className="mt-2 text-body-sm text-ink-muted">
-                Complete your profile to personalise your workouts.
+                Complete your profile so your trainers know where to start.
               </p>
             )}
           </div>
@@ -184,11 +148,6 @@ export default async function FitnessPage({
                   )}
                 >
                   <Icon className="size-4" aria-hidden /> {label}
-                  {key === "workouts" && recommendationPage.total > 0 ? (
-                    <span className="rounded-full bg-brand-soft px-1.5 text-[11px] text-brand tabular">
-                      {recommendationPage.total}
-                    </span>
-                  ) : null}
                 </Link>
               </li>
             );
@@ -235,46 +194,6 @@ export default async function FitnessPage({
                 )}
               </CardContent>
             </Card>
-
-            {cards[0] ? (
-              <Link
-                href="/customer/fitness?tab=workouts"
-                className="group flex items-center gap-4 rounded-lg border border-hairline bg-raised p-4 shadow-(--shadow-1) transition-colors hover:border-brand"
-              >
-                <span
-                  className="grid size-11 shrink-0 place-items-center rounded-full bg-brand-soft text-brand"
-                  aria-hidden
-                >
-                  <Sparkles className="size-5" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-body-sm text-ink-muted">Latest workout for you</span>
-                  <span className="block truncate font-semibold">{cards[0].title}</span>
-                  <span className="block text-body-sm text-ink-muted">
-                    {categoryLabel(cards[0].category as WorkoutCategory)} · {cards[0].durationMinutes} min
-                  </span>
-                </span>
-                <span className="text-body-sm font-semibold text-brand group-hover:underline">View</span>
-              </Link>
-            ) : (
-              <Link
-                href="/customer/fitness?tab=workouts"
-                className="flex items-center gap-4 rounded-lg border border-dashed border-control bg-raised p-4 transition-colors hover:border-brand"
-              >
-                <span
-                  className="grid size-11 shrink-0 place-items-center rounded-full bg-brand-soft text-brand"
-                  aria-hidden
-                >
-                  <Sparkles className="size-5" />
-                </span>
-                <span className="flex-1">
-                  <span className="block font-semibold">Generate your first workout</span>
-                  <span className="block text-body-sm text-ink-muted">
-                    Built from your goals, level and equipment.
-                  </span>
-                </span>
-              </Link>
-            )}
           </div>
 
           <div className="grid content-start gap-5">
@@ -375,45 +294,6 @@ export default async function FitnessPage({
             </Card>
           </div>
         </div>
-      ) : null}
-
-      {tab === "workouts" ? (
-        <section aria-labelledby="recs-h" className="grid gap-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 id="recs-h" className="text-heading-md font-semibold">
-                Your workouts
-              </h2>
-              <p className="text-body-sm text-ink-muted">
-                Generated from your profile and session history, never on page load — only when you ask.
-              </p>
-            </div>
-            <p className="inline-flex items-center gap-1.5 text-body-sm font-semibold text-ink-muted">
-              <Tag className="size-4" aria-hidden /> AI or curated — always labelled
-            </p>
-          </div>
-          <GenerateRecommendationButton goals={activeGoals} />
-          {cards.length === 0 ? (
-            <EmptyState
-              title="No workouts yet"
-              body="Generate one above. It will use your goals, level, equipment and recent sessions."
-            />
-          ) : (
-            <ul className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-              {cards.map((c) => (
-                <li key={c.id}>
-                  <RecommendationCard rec={c} />
-                </li>
-              ))}
-            </ul>
-          )}
-          <Pagination
-            pathname="/customer/fitness"
-            searchParams={{ tab: "workouts" }}
-            result={recommendationPage}
-            itemLabel="workouts"
-          />
-        </section>
       ) : null}
 
       {tab === "history" ? (

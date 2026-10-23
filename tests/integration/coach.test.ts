@@ -2,7 +2,6 @@ import type { BaseMessage } from "@langchain/core/messages";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { CoachModel, CoachModels } from "@/lib/coach/graph";
 import { askCoach, clearCoachHistory, getCoachThread, type CoachDeps } from "@/server/coach/coach-service";
-import { getAiUsage } from "@/server/fitness/fitness-service";
 import { NOW, alice, arun, bob, createTestDb, resetAndSeed, testDeps } from "./helpers";
 
 const db = createTestDb();
@@ -89,11 +88,9 @@ describe("coach chat", () => {
     expect(texts.some((t) => t.includes("First question about squats"))).toBe(true);
 
     const bobAnswerer = fake("openrouter:free", "Hi Bob.");
-    await askCoach(
-      deps({ classifiers: [fake("groq:fast", "WORKOUT")], answerers: [bobAnswerer] }),
-      bob,
-      { message: "How should I warm up?" },
-    );
+    await askCoach(deps({ classifiers: [fake("groq:fast", "WORKOUT")], answerers: [bobAnswerer] }), bob, {
+      message: "How should I warm up?",
+    });
     const bobSystem = String(bobAnswerer.calls[0]![0]!.content);
     expect(bobSystem).toContain("Bob");
     expect(bobSystem).not.toContain("Alice");
@@ -142,7 +139,12 @@ describe("coach chat", () => {
     expect(res.data).toMatchObject({ route: "ANSWERED", source: "RULE_BASED", modelId: null });
     expect(res.data.content).toMatch(/no session booked|don't have a session/i);
     const log = await db.aiRequestLog.findFirstOrThrow({ where: { customerId: alice.userId } });
-    expect(log).toMatchObject({ feature: "COACH", source: "RULE_BASED", outcome: "SUCCESS", errorKind: "RATE_LIMITED" });
+    expect(log).toMatchObject({
+      feature: "COACH",
+      source: "RULE_BASED",
+      outcome: "SUCCESS",
+      errorKind: "RATE_LIMITED",
+    });
   });
 
   it("enforces the per-minute limit before calling the models", async () => {
@@ -185,16 +187,11 @@ describe("coach chat", () => {
     if (!forbidden.ok) expect(forbidden.error.code).toBe("FORBIDDEN");
   });
 
-  it("keeps recommendation usage figures separate from coach questions", async () => {
+  it("logs each coach question as a COACH request", async () => {
     await askCoach(deps(workingModels()), alice, { message: "How should I warm up?" });
-    await db.aiRequestLog.create({
-      data: { customerId: alice.userId, feature: "RECOMMENDATION", source: "AI", outcome: "SUCCESS", modelId: "test" },
-    });
     const rows = await db.aiRequestLog.findMany({ where: { customerId: alice.userId } });
-    expect(rows).toHaveLength(2);
-    expect(rows.find((r) => r.feature === "COACH")?.createdAt.getTime()).toBe(NOW.getTime());
-    const usage = await getAiUsage(db);
-    expect(usage.aiSuccess).toBe(1);
-    expect(usage.fallback).toBe(0);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.feature).toBe("COACH");
+    expect(rows[0]?.createdAt.getTime()).toBe(NOW.getTime());
   });
 });

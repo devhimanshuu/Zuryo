@@ -19,26 +19,22 @@ const serverEnvSchema = z.object({
   /** Bearer token for /api/cron/session-lifecycle. Unset = the endpoint is disabled. */
   CRON_SECRET: optional(z.string().min(16, "CRON_SECRET must be at least 16 characters")),
   /**
-   * AI features (workout recommendations and the fitness coach). "auto" chains Groq then
-   * OpenRouter for whichever keys are set; an explicit value uses only that vendor. The coach has
-   * no Anthropic client, so with "anthropic" it answers from curated replies while recommendations
-   * use Anthropic. With no key at all both features use their rule-based replies (labelled as such).
+   * AI for the fitness coach. "auto" chains Groq then OpenRouter (free models only) for whichever
+   * keys are set; an explicit value uses only that vendor. With no key the coach answers from its
+   * rule-based replies (labelled as such).
    */
   AI_PROVIDER: z.preprocess(
     (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-    z.enum(["auto", "groq", "openrouter", "anthropic"]).default("auto"),
+    z.enum(["auto", "groq", "openrouter"]).default("auto"),
   ),
   GROQ_API_KEY: optional(z.string()),
-  /** Groq model id, or a comma-separated list tried in order (default: src/lib/ai/provider.ts). */
+  /** Groq model id, or a comma-separated list tried in order (default: src/server/coach/models.ts). */
   GROQ_MODEL: optional(z.string()),
   /** Small, fast Groq model the coach uses to classify questions (default: openai/gpt-oss-20b). */
   GROQ_FAST_MODEL: optional(z.string()),
   OPENROUTER_API_KEY: optional(z.string()),
-  /** OpenRouter model id, or a comma-separated fallback list (default: see src/lib/ai/provider.ts). */
+  /** OpenRouter model id, or a comma-separated fallback list (default: see src/server/coach/models.ts). */
   OPENROUTER_MODEL: optional(z.string()),
-  ANTHROPIC_API_KEY: optional(z.string()),
-  /** Anthropic model id; defaults to claude-haiku-5-5. */
-  ANTHROPIC_MODEL: optional(z.string()),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

@@ -36,9 +36,6 @@ export const EQUIPMENT_OPTIONS = [
   "SKIPPING_ROPE",
   "STATIONARY_BIKE",
 ] as const;
-export const RECOMMENDATION_SOURCES = ["AI", "RULE_BASED"] as const;
-export const RECOMMENDATION_STATUSES = ["ACTIVE", "ARCHIVED"] as const;
-export const RECOMMENDATION_FEEDBACKS = ["USEFUL", "NOT_USEFUL"] as const;
 export const WORKOUT_PREFERENCES = [
   "MORNING",
   "EVENING",
@@ -61,9 +58,6 @@ export const fitnessGoalSchema = z.enum(FITNESS_GOALS);
 export const workoutIntensitySchema = z.enum(WORKOUT_INTENSITIES, { error: "Choose an intensity" });
 export const workoutEnvironmentSchema = z.enum(WORKOUT_ENVIRONMENTS);
 export const equipmentOptionSchema = z.enum(EQUIPMENT_OPTIONS);
-export const recommendationSourceSchema = z.enum(RECOMMENDATION_SOURCES);
-export const recommendationStatusSchema = z.enum(RECOMMENDATION_STATUSES);
-export const recommendationFeedbackSchema = z.enum(RECOMMENDATION_FEEDBACKS);
 export const workoutPreferenceSchema = z.enum(WORKOUT_PREFERENCES);
 export const pricingKindSchema = z.enum(PRICING_KINDS);
 export const workoutCategorySchema = z.enum(WORKOUT_CATEGORIES, { error: "Choose a workout type" });
@@ -80,9 +74,6 @@ export type WorkoutPreference = z.infer<typeof workoutPreferenceSchema>;
 export type WorkoutIntensity = z.infer<typeof workoutIntensitySchema>;
 export type WorkoutEnvironment = z.infer<typeof workoutEnvironmentSchema>;
 export type EquipmentOption = z.infer<typeof equipmentOptionSchema>;
-export type RecommendationSource = z.infer<typeof recommendationSourceSchema>;
-export type RecommendationStatus = z.infer<typeof recommendationStatusSchema>;
-export type RecommendationFeedback = z.infer<typeof recommendationFeedbackSchema>;
 
 export const ROLE_HOME: Record<Role, string> = {
   CUSTOMER: "/customer",

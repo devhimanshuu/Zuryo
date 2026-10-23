@@ -9,7 +9,7 @@ import {
 } from "./enums";
 
 /** Caps for voluntary free-text profile fields. Kept small on purpose: enough to be useful, short
- * enough that the recommendation context never turns into a dump of personal data. */
+ * enough that a profile never turns into a dump of personal data. */
 export const PROFILE_TEXT_MAX = 300;
 
 /** Bounds for the assessment's body measurements. Adults only; both fields stay optional. */
@@ -70,7 +70,7 @@ export const fitnessProfileSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["fitnessGoals"],
-        message: "Pick at least one goal so recommendations have something to work with",
+        message: "Pick at least one goal so your progress has something to track",
       });
     }
     for (const [key] of Object.entries(v.goals)) {
@@ -87,7 +87,3 @@ export const fitnessProfileSchema = z
 export type FitnessProfileInput = z.input<typeof fitnessProfileSchema>;
 export type FitnessProfileOutput = z.output<typeof fitnessProfileSchema>;
 
-/** One goal to generate a recommendation for. Must be one the customer actually selected. */
-export const generateRecommendationSchema = z
-  .object({ goal: fitnessGoalSchema, regenerate: z.boolean().optional() })
-  .strict();

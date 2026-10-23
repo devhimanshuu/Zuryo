@@ -1,6 +1,6 @@
 /**
  * The bounded slice of a customer's data the coach may use. Built on the server from the customer's
- * own records only. Like the recommendation context it leaves out contact details, address, weight
+ * own records only. It leaves out contact details, address, weight
  * and payments; free-text fields the customer volunteered are capped.
  */
 export type CoachContext = {
@@ -26,7 +26,6 @@ export type CoachContext = {
   pkg: { name: string; remaining: number; total: number; validUntil: string | null } | null;
   completedCount: number;
   recentSessions: Array<{ date: string; category: string; trainerSuggestion: string | null }>;
-  latestPlan: { title: string; source: "AI" | "RULE_BASED" } | null;
 };
 
 const cap = (s: string | null, n: number) => (s && s.length > n ? `${s.slice(0, n - 1)}…` : s);
@@ -58,7 +57,6 @@ export function coachContextToPrompt(c: CoachContext): string {
       (s, i) =>
         `Recent session ${i + 1}: ${s.date}, ${s.category}${s.trainerSuggestion ? `; trainer suggested next: ${cap(s.trainerSuggestion, 160)}` : ""}`,
     ),
-    c.latestPlan ? `Latest workout plan in the app: ${c.latestPlan.title}` : "Latest workout plan in the app: none",
   ];
   return lines.join("\n");
 }

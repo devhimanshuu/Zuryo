@@ -76,8 +76,6 @@ export type WizardProps = {
   /** The customer's active packages with sessions left (the server re-checks on confirm). */
   packages: WizardPackage[];
   initialMode?: BookingMode | null;
-  /** Pre-selected workout, e.g. carried over from a recommendation. The customer still reviews it. */
-  initialCategory?: WorkoutCategory | null;
 };
 
 const workoutFormSchema = z.object({ workoutCategory: workoutCategorySchema, notes: bookingNotesSchema });
@@ -88,7 +86,7 @@ type BookingDraft = { mode?: BookingMode | null; category?: WorkoutCategory | nu
 
 const noopSubscribe = () => () => {};
 
-export function BookingWizard({ customer, categories, packages, initialMode, initialCategory }: WizardProps) {
+export function BookingWizard({ customer, categories, packages, initialMode }: WizardProps) {
   const router = useRouter();
   const tz = customer.timeZone;
   // False during SSR and until React hydrates. Submit buttons wait for it, so a click on the
@@ -132,14 +130,14 @@ export function BookingWizard({ customer, categories, packages, initialMode, ini
   const workoutForm = useForm<z.input<typeof workoutFormSchema>, unknown, z.output<typeof workoutFormSchema>>(
     {
       resolver: zodResolver(workoutFormSchema),
-      defaultValues: { workoutCategory: initialCategory ?? undefined, notes: "" },
+      defaultValues: { workoutCategory: undefined, notes: "" },
     },
   );
   const draftNotes = workoutForm.watch("notes") ?? "";
 
   // Restore an unfinished choice (never a slot or price — those are re-checked server-side).
   useEffect(() => {
-    if (!hydrated || initialMode || initialCategory) return;
+    if (!hydrated || initialMode) return;
     let draft: BookingDraft | null = null;
     try {
       draft = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null") as BookingDraft | null;
@@ -164,7 +162,7 @@ export function BookingWizard({ customer, categories, packages, initialMode, ini
       setNotes(nextNotes);
     }
     setDraftRestored(true);
-  }, [hydrated, initialMode, initialCategory, workoutForm]);
+  }, [hydrated, initialMode, workoutForm]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -198,7 +196,7 @@ export function BookingWizard({ customer, categories, packages, initialMode, ini
     setSubmitError(null);
     setPaymentChoice(null);
     setStep(initialMode ? "workout" : "type");
-    workoutForm.reset({ workoutCategory: initialCategory ?? undefined, notes: "" });
+    workoutForm.reset({ workoutCategory: undefined, notes: "" });
   }
 
   // ─── Data loading ───────────────────────────────────────────────────────
@@ -495,13 +493,6 @@ export function BookingWizard({ customer, categories, packages, initialMode, ini
               title="What would you like to work on?"
               description={`Trainers are matched to the workout you choose, from ${customer.zoneName}.`}
             >
-              {initialCategory ? (
-                <Notice tone="info" className="-mt-2">
-                  Pre-filled from your workout recommendation:{" "}
-                  <strong>{categoryLabel(initialCategory)}</strong>. Change it if you like — the rest of the
-                  booking works exactly as usual.
-                </Notice>
-              ) : null}
               <form onSubmit={submitWorkout} method="post" noValidate className="grid gap-6">
                 <fieldset className="min-w-0">
                   <legend className="sr-only">Workout type</legend>

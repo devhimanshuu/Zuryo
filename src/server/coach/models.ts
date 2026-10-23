@@ -1,11 +1,25 @@
 import "server-only";
 import { ChatGroq } from "@langchain/groq";
 import { ChatOpenAI } from "@langchain/openai";
-import { DEFAULT_GROQ_MODEL, DEFAULT_OPENROUTER_MODEL, type AiProviderName } from "@/lib/ai/provider";
 import type { CoachModel, CoachModels } from "@/lib/coach/graph";
 
 /** Fast model for one-word classification (Groq free tier). */
 export const DEFAULT_GROQ_FAST_MODEL = "openai/gpt-oss-20b";
+/** A vendor the coach can be restricted to; "auto" uses every vendor that has a key. */
+export type AiProviderName = "groq" | "openrouter";
+
+/**
+ * Default Groq models (free tier), tried in order: gpt-oss-120b for quality, then Qwen, then the
+ * small gpt-oss. Groq's catalogue changes; set GROQ_MODEL (comma-separated) to override.
+ */
+export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b,qwen/qwen3.8-27b,openai/gpt-oss-20b";
+/**
+ * Default OpenRouter models, free tier only, tried in order. Free models are rate limited and their
+ * availability changes (verified live 2026-10-23); set OPENROUTER_MODEL to override. Only ids ending
+ * in ":free" are ever called.
+ */
+export const DEFAULT_OPENROUTER_MODEL =
+  "nvidia/nemotron-3-ultra-550b-a55b:free,recursive/flint-v1.0:free,poolside/laguna-s-2.1:free,google/gemma-4-31b-it:free,openrouter/free";
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 export type CoachModelEnv = {
@@ -31,9 +45,8 @@ export const isFreeOpenRouterModel = (id: string) => id.endsWith(":free");
  * LangChain chat models for the coach, in the order the graph tries them: every Groq model first
  * (fast, free tier), then every free OpenRouter model, each as its own entry in the failover list.
  * Retries are off: a failure moves straight to the next model instead of waiting on backoff.
- * An explicit `AI_PROVIDER` restricts the coach to that free-tier vendor; "anthropic" (which the
- * recommendation engine supports but the coach does not) leaves both lists empty, so the coach
- * answers from its rule-based replies. With no keys both lists are empty too.
+ * An explicit `AI_PROVIDER` restricts the coach to that free-tier vendor. With no keys both lists are
+ * empty, so the coach answers from its rule-based replies.
  */
 export function coachModelsFromEnv(env: CoachModelEnv): CoachModels {
   const classifiers: CoachModel[] = [];

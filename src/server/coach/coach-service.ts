@@ -5,6 +5,7 @@ import { categoryLabel } from "@/lib/booking/categories";
 import type { CoachContext } from "@/lib/coach/context";
 import { runCoach, type CoachModels, type CoachResult, type CoachTurn } from "@/lib/coach/graph";
 import { COACH_LIMITS } from "@/lib/coach/scope";
+import { generateSmartSuggestions, type SmartSuggestion } from "@/lib/coach/suggestions";
 import type { CoachMessageView } from "@/lib/coach/thread";
 import { getServerEnv } from "@/lib/config/env.server";
 import { clientEnv } from "@/lib/config/env.client";
@@ -87,6 +88,26 @@ export async function getCoachThread(
 }
 
 /**
+ * Loads the stored conversation and produces dynamic smart prompts tailored to the customer's
+ * current state (upcoming booking, recent workouts, package, goals).
+ */
+export async function getCoachThreadWithSuggestions(
+  db: DbOrTx,
+  customerId: string,
+  now: Date,
+  limit = THREAD_LIMIT,
+): Promise<{ messages: CoachMessageView[]; suggestions: SmartSuggestion[] }> {
+  const [messages, context] = await Promise.all([
+    getCoachThread(db, customerId, limit),
+    loadCoachContext(db, customerId, now),
+  ]);
+  return {
+    messages,
+    suggestions: generateSmartSuggestions(context),
+  };
+}
+
+/**
  * Loads the bounded slice of the customer's own data the coach may see. No contact details,
  * address, weight or payment data; free-text fields are capped in the prompt builder.
  */
@@ -112,7 +133,7 @@ export async function loadCoachContext(
   });
   if (!profile) return null;
 
-  const [next, upcomingCount, pkg, completedCount, recent, latestPlan] = await Promise.all([
+  const [next, upcomingCount, pkg, completedCount, recent] = await Promise.all([
     db.booking.findFirst({
       where: { customerId, status: { in: [...ACTIVE_BOOKING_STATUSES] }, endAt: { gte: now } },
       orderBy: { startAt: "asc" },
@@ -145,11 +166,6 @@ export async function loadCoachContext(
         workoutCategory: true,
         sessionRecord: { select: { suggestedNextWorkout: true } },
       },
-    }),
-    db.workoutRecommendation.findFirst({
-      where: { customerId },
-      orderBy: { createdAt: "desc" },
-      select: { title: true, source: true },
     }),
   ]);
 
@@ -192,7 +208,6 @@ export async function loadCoachContext(
       category: categoryLabel(b.workoutCategory),
       trainerSuggestion: b.sessionRecord?.suggestedNextWorkout ?? null,
     })),
-    latestPlan: latestPlan ? { title: latestPlan.title, source: latestPlan.source } : null,
   };
 }
 

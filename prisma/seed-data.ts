@@ -7,7 +7,6 @@
  * current day in IST so the demo always has "upcoming" and "past" sessions.
  */
 import { calculatePriceBreakdown, isPeakStart, type PeakWindowLike } from "../src/lib/pricing";
-import { buildRuleBasedRecommendation, ruleBasedExplanation } from "../src/lib/fitness/templates";
 import { istMidnight } from "../src/lib/utils/time";
 
 export { istMidnight };
@@ -276,15 +275,18 @@ export const PACKAGE_PLANS = [
 ] as const;
 
 /** Phase 4: voluntary preference detail per customer, shown in the fitness profile. */
-export const PROFILE_DETAILS: Record<string, {
-  intensity: "LOW" | "MODERATE" | "HIGH" | null;
-  equipment: Array<"NONE" | "MAT" | "DUMBBELLS" | "RESISTANCE_BAND">;
-  environment: "HOME" | "OUTDOOR" | null;
-  avoidExercises: string | null;
-  accommodations: string | null;
-  movementLimitations: string | null;
-  goalDetails: string | null;
-}> = {
+export const PROFILE_DETAILS: Record<
+  string,
+  {
+    intensity: "LOW" | "MODERATE" | "HIGH" | null;
+    equipment: Array<"NONE" | "MAT" | "DUMBBELLS" | "RESISTANCE_BAND">;
+    environment: "HOME" | "OUTDOOR" | null;
+    avoidExercises: string | null;
+    accommodations: string | null;
+    movementLimitations: string | null;
+    goalDetails: string | null;
+  }
+> = {
   seed_user_priya: {
     intensity: "MODERATE",
     equipment: ["MAT", "DUMBBELLS"],
@@ -625,7 +627,10 @@ export function buildSeedPlan(anchor: Date) {
     { id: "seed_pkg_priya", customerId: "seed_user_priya", plan: PACKAGE_PLANS[2], purchasedAt: at(-14, 9) },
     { id: "seed_pkg_farhan", customerId: "seed_user_farhan", plan: PACKAGE_PLANS[1], purchasedAt: at(-5, 9) },
   ].map(({ plan, ...p }) => {
-    const price = calculatePriceBreakdown({ sessionPrice: plan.price, commissionPercent: standardCommission });
+    const price = calculatePriceBreakdown({
+      sessionPrice: plan.price,
+      commissionPercent: standardCommission,
+    });
     return {
       ...p,
       planId: plan.id,
@@ -743,60 +748,6 @@ export function buildSeedPlan(anchor: Date) {
     },
   ];
 
-  // Phase 4: one honest, rule-based recommendation for Priya so the dashboard has history out of
-  // the box. Built with the same deterministic engine the fallback uses, and labelled RULE_BASED.
-  const recommendationContext = {
-    customerName: "Priya Sharma",
-    goal: "STRENGTH" as const,
-    level: "INTERMEDIATE" as const,
-    age: 32,
-    intensity: "MODERATE",
-    environment: "HOME",
-    equipment: ["MAT", "DUMBBELLS"],
-    workoutPreferences: ["MORNING", "WEIGHTS"],
-    selectedGoals: ["WEIGHT_LOSS", "STRENGTH"] as Array<"WEIGHT_LOSS" | "STRENGTH">,
-    avoidExercises: "Barbell overhead presses",
-    accommodations: null,
-    movementLimitations: "Tight shoulders after long desk days",
-    goalDetails: "Train three times a week and keep the workouts under an hour.",
-    recentSessions: [
-      { category: "STRENGTH" as const, completedAt: at(-9, 8).toISOString() },
-      { category: "STRENGTH" as const, completedAt: at(-6, 11).toISOString() },
-      { category: "CARDIO" as const, completedAt: at(-2, 19).toISOString() },
-    ],
-    latestTrainerSuggestion: null,
-    categoryCounts: { STRENGTH: 2, CARDIO: 1 },
-    recentFeedback: [],
-  };
-  const priyaPlan = buildRuleBasedRecommendation(recommendationContext);
-  const recommendations = [
-    {
-      id: "seed_rec_priya_strength",
-      customerId: "seed_user_priya",
-      source: "RULE_BASED" as const,
-      status: "ACTIVE" as const,
-      goal: "STRENGTH" as const,
-      category: priyaPlan.category,
-      title: priyaPlan.title,
-      explanation: ruleBasedExplanation(recommendationContext),
-      durationMinutes: priyaPlan.durationMinutes,
-      intensity: priyaPlan.intensity,
-      goalSnapshot: ["WEIGHT_LOSS", "STRENGTH"] as const,
-      preferenceSnapshot: {
-        level: "INTERMEDIATE",
-        intensity: "MODERATE",
-        equipment: ["MAT", "DUMBBELLS"],
-        environment: "HOME",
-        workoutPreferences: ["MORNING", "WEIGHTS"],
-        movementLimitations: "Tight shoulders after long desk days",
-        accommodations: null,
-      },
-      payload: priyaPlan,
-      modelId: null,
-      createdAt: at(-1, 18),
-    },
-  ];
-
   return {
     zones: ZONES,
     packagePlans: PACKAGE_PLANS,
@@ -814,7 +765,6 @@ export function buildSeedPlan(anchor: Date) {
     notifications,
     profileDetails: PROFILE_DETAILS,
     fitnessGoalTracking: FITNESS_GOAL_TRACKING,
-    recommendations,
   };
 }
 

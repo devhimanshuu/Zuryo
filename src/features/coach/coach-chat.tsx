@@ -1,6 +1,6 @@
 "use client";
 
-import { Bot, ListChecks, MessageCircle, Send, Sparkles, Trash2, X } from "lucide-react";
+import { Bot, Clock, ListChecks, MessageCircle, Send, Sparkles, Trash2, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { Notice } from "@/components/shared/states";
@@ -8,14 +8,19 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { COACH_ROUTE_NOTE, type CoachMessageView } from "@/lib/coach/thread";
+import {
+  SUGGESTION_CATEGORIES,
+  type SmartSuggestion,
+  type SuggestionCategory,
+} from "@/lib/coach/suggestions";
 import { cn } from "@/lib/utils/cn";
 import { askCoachAction, clearCoachHistoryAction, loadCoachThreadAction } from "@/server/actions/coach";
-
-const SUGGESTIONS = [
-  "How should I warm up before strength training?",
-  "How many sessions are left in my package?",
-  "How can I stay consistent?",
-];
+import { CoachActions } from "./coach-actions";
+import { CoachFeedback } from "./coach-feedback";
+import { CoachMarkdown } from "./coach-markdown";
+import { CoachMemory } from "./coach-memory";
+import { CoachTimer } from "./coach-timer";
+import { CoachVoiceInput } from "./coach-voice-input";
 
 const LAUNCHER_SIZE = 56;
 const EDGE = 12;
@@ -73,6 +78,9 @@ export function CoachChat() {
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [messages, setMessages] = useState<CoachMessageView[]>([]);
+  const [suggestions, setSuggestions] = useState<SmartSuggestion[]>([]);
+  const [activeCategory, setActiveCategory] = useState<SuggestionCategory>("ALL");
+  const [showQuickTimer, setShowQuickTimer] = useState(false);
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -174,7 +182,13 @@ export function CoachChat() {
           setLoadError(res.error.message);
           return;
         }
-        setMessages(res.data);
+        const data = res.data;
+        if (Array.isArray(data)) {
+          setMessages(data);
+        } else {
+          setMessages(data.messages);
+          setSuggestions(data.suggestions);
+        }
         setLoaded(true);
       } catch {
         setLoadError("We couldn't load your conversation. Check your connection and try again.");
@@ -353,6 +367,17 @@ export function CoachChat() {
           </div>
           <Button
             type="button"
+            variant={showQuickTimer ? "secondary" : "ghost"}
+            size="icon"
+            onClick={() => setShowQuickTimer((v) => !v)}
+            aria-label={showQuickTimer ? "Hide workout timer" : "Open workout timer"}
+            title="Workout & rest timer"
+            className="size-9"
+          >
+            <Clock className="size-4" />
+          </Button>
+          <Button
+            type="button"
             variant="ghost"
             size="icon"
             onClick={() => setConfirmClear(true)}
@@ -374,6 +399,12 @@ export function CoachChat() {
             <X aria-hidden />
           </Button>
         </div>
+
+        {showQuickTimer && (
+          <div className="border-b border-hairline bg-surface p-3 animate-fade-in">
+            <CoachTimer onClose={() => setShowQuickTimer(false)} />
+          </div>
+        )}
 
         <div
           ref={listRef}
@@ -408,15 +439,48 @@ export function CoachChat() {
                   your profile and recent sessions — and it can&apos;t book, cancel or take payment.
                 </p>
               </div>
+
+              {/* Category Filter Chips */}
+              <div className="flex flex-wrap gap-1.5 border-b border-hairline/60 pb-2">
+                {SUGGESTION_CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.key}
+                    type="button"
+                    onClick={() => setActiveCategory(cat.key)}
+                    className={cn(
+                      "rounded-full px-2.5 py-1 text-xs font-semibold transition-colors",
+                      activeCategory === cat.key
+                        ? "bg-brand text-on-brand shadow-(--shadow-1)"
+                        : "bg-raised text-ink-muted hover:bg-brand-soft hover:text-brand",
+                    )}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Dynamic Suggestions List */}
               <ul className="grid gap-2">
-                {SUGGESTIONS.map((s) => (
-                  <li key={s}>
+                {(suggestions.length > 0
+                  ? suggestions.filter((s) => activeCategory === "ALL" || s.category === activeCategory)
+                  : [
+                      { id: "1", text: "How should I warm up before strength training?" },
+                      { id: "2", text: "How many sessions are left in my package?" },
+                      { id: "3", text: "How can I stay consistent?" },
+                    ]
+                ).map((s) => (
+                  <li key={s.id}>
                     <button
                       type="button"
-                      onClick={() => send(s)}
-                      className="w-full rounded-lg border border-hairline bg-raised px-3.5 py-2.5 text-left text-body-sm font-semibold text-ink-muted shadow-(--shadow-1) transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand"
+                      onClick={() => send(s.text)}
+                      className="group flex w-full items-center justify-between gap-2 rounded-lg border border-hairline bg-raised px-3.5 py-2.5 text-left text-body-sm font-semibold text-ink shadow-(--shadow-1) transition-colors hover:border-brand hover:bg-brand-soft hover:text-brand"
                     >
-                      {s}
+                      <span className="flex-1">{s.text}</span>
+                      {"badge" in s && s.badge ? (
+                        <span className="shrink-0 rounded-full bg-brand-soft px-1.5 py-0.5 text-[10px] font-bold text-brand">
+                          {s.badge}
+                        </span>
+                      ) : null}
                     </button>
                   </li>
                 ))}
@@ -447,7 +511,17 @@ export function CoachChat() {
                         ) : null}
                       </p>
                     ) : null}
-                    <p className="whitespace-pre-line">{m.content}</p>
+                    <CoachMarkdown content={m.content} isAssistant={m.role === "ASSISTANT"} />
+                    {m.role === "ASSISTANT" && (
+                      <CoachActions
+                        content={m.content}
+                        onSendPrompt={(prompt) => send(prompt)}
+                        disabled={busy}
+                      />
+                    )}
+                    {m.role === "ASSISTANT" && (
+                      <CoachFeedback messageId={m.id} />
+                    )}
                   </div>
                 </li>
               ))}
@@ -499,6 +573,12 @@ export function CoachChat() {
               rows={2}
               disabled={loading || !!loadError}
             />
+            <CoachVoiceInput
+              onTranscript={(transcript) =>
+                setDraft((prev) => (prev ? `${prev} ${transcript}` : transcript))
+              }
+              disabled={loading || !!loadError || busy}
+            />
             <Button
               type="submit"
               variant="primary"
@@ -510,10 +590,13 @@ export function CoachChat() {
               <Send aria-hidden />
             </Button>
           </div>
-          <p className="mt-1.5 flex justify-between gap-2 text-body-sm text-ink-subtle">
-            <span>Enter to send · Shift + Enter for a new line</span>
+          <div className="mt-1.5 flex items-center justify-between gap-2 text-body-sm text-ink-subtle">
+            <div className="flex items-center gap-2">
+              <span>Enter to send · Shift + Enter for a new line</span>
+              <CoachMemory />
+            </div>
             <span className="tabular">{draft.length}/500</span>
-          </p>
+          </div>
         </form>
 
         {confirmClear ? (

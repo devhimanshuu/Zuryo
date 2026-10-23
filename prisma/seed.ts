@@ -46,7 +46,12 @@ async function main() {
       }
 
       for (const c of plan.customers) {
-        const user = { name: c.name, email: c.email, role: "CUSTOMER" as const, passwordHash: DEMO_PASSWORD_HASH };
+        const user = {
+          name: c.name,
+          email: c.email,
+          role: "CUSTOMER" as const,
+          passwordHash: DEMO_PASSWORD_HASH,
+        };
         await tx.user.upsert({ where: { id: c.id }, create: { id: c.id, ...user }, update: user });
         const details = plan.profileDetails[c.id];
         const profile = {
@@ -78,7 +83,12 @@ async function main() {
       }
 
       for (const t of plan.trainers) {
-        const user = { name: t.name, email: t.email, role: "TRAINER" as const, passwordHash: DEMO_PASSWORD_HASH };
+        const user = {
+          name: t.name,
+          email: t.email,
+          role: "TRAINER" as const,
+          passwordHash: DEMO_PASSWORD_HASH,
+        };
         await tx.user.upsert({ where: { id: t.id }, create: { id: t.id, ...user }, update: user });
         const profile = {
           serviceZoneId: t.zoneId,
@@ -211,7 +221,15 @@ async function main() {
           });
           if (c.packageId) {
             await tx.packageLedgerEntry.createMany({
-              data: [{ packageId: c.packageId, bookingId: c.id, delta: 1, reason: "CANCELLATION_REFUND", note: "Demo re-seed" }],
+              data: [
+                {
+                  packageId: c.packageId,
+                  bookingId: c.id,
+                  delta: 1,
+                  reason: "CANCELLATION_REFUND",
+                  note: "Demo re-seed",
+                },
+              ],
               skipDuplicates: true,
             });
           }
@@ -267,7 +285,10 @@ async function main() {
       // The cached counter always equals the ledger, including redemptions made in the app.
       const now = new Date();
       for (const p of plan.packages) {
-        const net = await tx.packageLedgerEntry.aggregate({ where: { packageId: p.id }, _sum: { delta: true } });
+        const net = await tx.packageLedgerEntry.aggregate({
+          where: { packageId: p.id },
+          _sum: { delta: true },
+        });
         const used = Math.min(p.totalSessions, Math.max(0, -(net._sum.delta ?? 0)));
         await tx.package.update({
           where: { id: p.id },
@@ -338,32 +359,6 @@ async function main() {
           where: { id: g.id },
           create: { id: g.id, ...data },
           update: data,
-        });
-      }
-
-      // Phase 4: the seeded recommendation is created once and never overwritten afterwards
-      // (feedback and status belong to the customer, not to the seed).
-      for (const r of plan.recommendations) {
-        await tx.workoutRecommendation.upsert({
-          where: { id: r.id },
-          create: {
-            id: r.id,
-            customerId: r.customerId,
-            source: r.source,
-            status: r.status,
-            goal: r.goal,
-            category: r.category,
-            title: r.title,
-            explanation: r.explanation,
-            durationMinutes: r.durationMinutes,
-            intensity: r.intensity,
-            goalSnapshot: [...r.goalSnapshot],
-            preferenceSnapshot: r.preferenceSnapshot as Prisma.InputJsonValue,
-            payload: r.payload as unknown as Prisma.InputJsonValue,
-            modelId: r.modelId,
-            createdAt: r.createdAt,
-          },
-          update: {},
         });
       }
     },

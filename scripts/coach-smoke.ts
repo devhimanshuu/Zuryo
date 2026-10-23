@@ -1,8 +1,7 @@
 import "dotenv/config";
-import type { AiProviderName } from "@/lib/ai/provider";
 import type { CoachContext } from "@/lib/coach/context";
 import { runCoach } from "@/lib/coach/graph";
-import { coachModelsFromEnv } from "@/server/coach/models";
+import { coachModelsFromEnv, type AiProviderName } from "@/server/coach/models";
 
 /**
  * Live check of the fitness coach graph against the configured providers, outside the app and the
@@ -38,7 +37,6 @@ const SYNTHETIC: CoachContext = {
       trainerSuggestion: "Lower-body strength with a short finisher.",
     },
   ],
-  latestPlan: null,
 };
 
 const QUESTIONS = [

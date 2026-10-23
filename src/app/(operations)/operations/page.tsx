@@ -1,6 +1,5 @@
 import {
   Ban,
-  Bot,
   CalendarCheck,
   CircleCheck,
   CreditCard,
@@ -33,7 +32,6 @@ import { dailySeries } from "@/lib/trend";
 import { safely } from "@/lib/utils/errors";
 import { DEFAULT_TZ, formatSlot, formatTime } from "@/lib/utils/format";
 import { getActivePricingRules } from "@/server/booking/pricing-service";
-import { getAiUsage } from "@/server/fitness/fitness-service";
 import { getOperationsFinance, getOperationsOverview } from "@/server/queries/operations";
 import { getSessionsNeedingAttention } from "@/server/sessions/session-service";
 
@@ -42,14 +40,13 @@ export const metadata: Metadata = { title: "Operations overview" };
 export default async function OperationsOverviewPage() {
   const result = await safely(async () => {
     const db = getDb();
-    const [overview, finance, attention, pricing, ai] = await Promise.all([
+    const [overview, finance, attention, pricing] = await Promise.all([
       getOperationsOverview(),
       getOperationsFinance(),
       getSessionsNeedingAttention(db, new Date()),
       getActivePricingRules(db),
-      getAiUsage(db),
     ]);
-    return { ...overview, finance, attention, pricing, ai };
+    return { ...overview, finance, attention, pricing };
   });
   if (!result.ok) return <ErrorState message={result.error.message} />;
   const {
@@ -61,7 +58,6 @@ export default async function OperationsOverviewPage() {
     finance,
     attention,
     pricing,
-    ai,
     trendBookings,
     trendRevenue,
   } = result.data;
@@ -113,7 +109,11 @@ export default async function OperationsOverviewPage() {
       />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Metric label="Total bookings" value={<AnimatedNumber value={total} />} icon={ListChecks} />
-        <Metric label="Confirmed" value={<AnimatedNumber value={counts.CONFIRMED ?? 0} />} icon={CalendarCheck} />
+        <Metric
+          label="Confirmed"
+          value={<AnimatedNumber value={counts.CONFIRMED ?? 0} />}
+          icon={CalendarCheck}
+        />
         <Metric
           label="In progress"
           value={<AnimatedNumber value={counts.IN_PROGRESS ?? 0} />}
@@ -244,58 +244,6 @@ export default async function OperationsOverviewPage() {
                 </div>
               ))}
             </dl>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div>
-              <CardTitle>AI workout recommendations</CardTitle>
-              <p className="text-body-sm text-ink-muted">
-                Counts from the recommendation request log. Fallbacks are the deterministic templates.
-              </p>
-            </div>
-            <CardIcon icon={Bot} />
-          </CardHeader>
-          <CardContent>
-            <dl className="grid grid-cols-3 gap-2.5">
-              <div className="rounded-md border border-hairline bg-surface px-3 py-2.5">
-                <dt className="text-body-sm text-ink-muted">AI-generated</dt>
-                <dd className="text-heading-lg font-semibold tabular">{ai.aiSuccess}</dd>
-              </div>
-              <div className="rounded-md border border-hairline bg-surface px-3 py-2.5">
-                <dt className="text-body-sm text-ink-muted">Rule-based fallback</dt>
-                <dd className="text-heading-lg font-semibold tabular">{ai.fallback}</dd>
-              </div>
-              <div className="rounded-md border border-hairline bg-surface px-3 py-2.5">
-                <dt className="text-body-sm text-ink-muted">AI attempts failed</dt>
-                <dd className="text-heading-lg font-semibold tabular">{ai.aiFailed}</dd>
-              </div>
-            </dl>
-            <p className="mt-3 text-body-sm text-ink-muted">
-              {ai.measured.calls > 0
-                ? `Measured over ${ai.measured.calls} AI call${ai.measured.calls === 1 ? "" : "s"}: ${(
-                    (ai.measured.avgLatencyMs ?? 0) / 1000
-                  ).toFixed(1)} s average latency${
-                    ai.measured.avgInputTokens !== null && ai.measured.avgOutputTokens !== null
-                      ? `, ${ai.measured.avgInputTokens} input / ${ai.measured.avgOutputTokens} output tokens on average`
-                      : ""
-                  }.`
-                : "No AI call has been measured yet."}
-            </p>
-            {ai.recentFailures.length > 0 ? (
-              <ul className="mt-3 grid gap-1 border-t border-hairline pt-3">
-                {ai.recentFailures.map((f, i) => (
-                  <li key={i} className="text-body-sm text-ink-muted">
-                    {formatSlot(f.at)} · {f.source === "AI" ? "AI" : "fallback"} · {f.kind}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-3 border-t border-hairline pt-3 text-body-sm text-ink-muted">
-                No failures logged. Every generation attempt is recorded, so zero here means none failed.
-              </p>
-            )}
           </CardContent>
         </Card>
       </div>

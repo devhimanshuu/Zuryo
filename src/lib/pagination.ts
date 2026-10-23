@@ -15,7 +15,6 @@ export const PAGE_SIZES = {
   operationsTrainers: 12,
   customerPackages: 6,
   pricingHistory: 10,
-  recommendations: 6,
 } as const;
 
 export type SearchParamsRecord = Record<string, string | string[] | undefined>;
