@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 /** Dispatch on `window` to ask for an immediate check (e.g. when a countdown reaches its deadline). */
-export const LIVE_CHECK_EVENT = "zuryo:live-check";
+export const LIVE_CHECK_EVENT = "zuryofit:live-check";
 
 const POLL_MS = 20_000;
 

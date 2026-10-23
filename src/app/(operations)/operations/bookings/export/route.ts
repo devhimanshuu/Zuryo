@@ -54,7 +54,7 @@ export async function GET(request: Request) {
     ]),
   ];
 
-  const filename = `zuryo-bookings-${new Date().toISOString().slice(0, 10)}.csv`;
+  const filename = `zuryofit-bookings-${new Date().toISOString().slice(0, 10)}.csv`;
   return new Response(`\uFEFF${toCsv(rows)}`, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",

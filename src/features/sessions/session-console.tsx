@@ -16,7 +16,7 @@ import { completeSessionAction, startSessionAction, syncSessionAction } from "@/
 import type { SessionState } from "@/server/sessions/session-service";
 import { buzz, buzzerReady, unlockBuzzer } from "./buzzer";
 
-const SOUND_KEY = "zuryo:buzzer-sound";
+const SOUND_KEY = "zuryofit:buzzer-sound";
 
 function toClock(s: SessionState): SessionClock | null {
   if (!s.startedAt || !s.endsAt) return null;
@@ -116,7 +116,7 @@ export function SessionConsole({
     if (status !== "IN_PROGRESS" || !clock) return;
     const cue = buzzerCue(clock, prev, now);
     if (!cue) return;
-    const key = `zuryo:buzz:${state.bookingId}:${cue}`;
+    const key = `zuryofit:buzz:${state.bookingId}:${cue}`;
     try {
       if (sessionStorage.getItem(key)) return;
       sessionStorage.setItem(key, "1");
@@ -166,7 +166,7 @@ export function SessionConsole({
         toast.success(okMessage(res.data));
         router.refresh();
       } catch {
-        setError("We couldn't reach Zuryo. Check your connection; nothing changes until the server confirms.");
+        setError("We couldn't reach ZuryoFit. Check your connection; nothing changes until the server confirms.");
       }
     });
   }

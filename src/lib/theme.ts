@@ -1,4 +1,4 @@
-export const THEME_STORAGE_KEY = "zuryo-theme";
+export const THEME_STORAGE_KEY = "zuryofit-theme";
 
 export type ThemeChoice = "light" | "dark" | "system";
 

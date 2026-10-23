@@ -14,7 +14,7 @@ export type LiveSnapshot = {
 /**
  * What an open workspace page polls to stay current without a reload.
  *
- * 1. Reconciles the actor's due sessions first. While anyone involved in a session has Zuryo open
+ * 1. Reconciles the actor's due sessions first. While anyone involved in a session has ZuryoFit open
  *    (customer, trainer or operations), its 55-minute warning and 60-minute completion are recorded
  *    within one poll, even if the trainer's session screen is closed.
  * 2. Returns a fingerprint of the actor's bookings (status, time, trainer, reschedules), session

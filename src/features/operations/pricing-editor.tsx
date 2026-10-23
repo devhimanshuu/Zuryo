@@ -71,7 +71,7 @@ export function PricingEditor({ defaults }: { defaults: FormIn }) {
       });
       router.refresh();
     } catch {
-      setServerError("We couldn't reach Zuryo, so nothing was saved. Try again.");
+      setServerError("We couldn't reach ZuryoFit, so nothing was saved. Try again.");
     }
   }
 

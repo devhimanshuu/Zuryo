@@ -37,7 +37,7 @@ test.describe("authentication", () => {
     await page.waitForLoadState("networkidle");
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(page.getByText("Log out of Zuryo?")).toBeVisible();
+    await expect(page.getByText("Log out of ZuryoFit?")).toBeVisible();
     await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
     await expect(page.getByRole("dialog")).toBeHidden();
     await expect(page.getByText("Signed in as")).toBeVisible();

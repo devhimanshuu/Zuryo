@@ -43,7 +43,7 @@ export function RescheduleBookingButton({ bookingId, reference }: { bookingId: s
       const firstOpen = res.data.schedule.days.find((d) => d.availableCount > 0);
       setDateKey((k) => k ?? firstOpen?.dateKey ?? res.data.schedule.days[0]?.dateKey ?? null);
     } catch {
-      setError("We couldn't reach Zuryo. Check your connection and try again.");
+      setError("We couldn't reach ZuryoFit. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -69,7 +69,7 @@ export function RescheduleBookingButton({ bookingId, reference }: { bookingId: s
       setOpen(false);
       router.refresh();
     } catch {
-      setError("We couldn't reach Zuryo, so the booking wasn't moved. Try again.");
+      setError("We couldn't reach ZuryoFit, so the booking wasn't moved. Try again.");
     } finally {
       setSaving(false);
     }

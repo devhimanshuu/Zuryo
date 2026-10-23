@@ -59,7 +59,7 @@ export function BookingConfirmedMoment({
         <div className="flex animate-rise flex-wrap gap-2 [animation-delay:260ms]">
           <CopyButton value={reference} label="Copy reference" />
           <Button asChild variant="secondary" size="sm">
-            <a href={`/customer/bookings/${bookingId}/calendar`} download={`zuryo-${reference}.ics`}>
+            <a href={`/customer/bookings/${bookingId}/calendar`} download={`zuryofit-${reference}.ics`}>
               <Download aria-hidden /> Add to calendar
             </a>
           </Button>

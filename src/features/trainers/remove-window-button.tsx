@@ -27,7 +27,7 @@ export function RemoveWindowButton({ availabilityId, label }: { availabilityId: 
             toast.success("Time window removed");
             router.refresh();
           } catch {
-            toast.error("We couldn't reach Zuryo. Check your connection and try again.");
+            toast.error("We couldn't reach ZuryoFit. Check your connection and try again.");
           }
         })
       }

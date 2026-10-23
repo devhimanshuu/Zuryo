@@ -70,7 +70,7 @@ export default async function BookingDetailPage({
       : b.cancelledBy?.role === "TRAINER"
         ? "your trainer"
         : b.cancelledBy?.role === "OPERATIONS"
-          ? "Zuryo operations"
+          ? "ZuryoFit operations"
           : null;
 
   return (
@@ -245,7 +245,7 @@ export default async function BookingDetailPage({
                     </span>
                   </li>
                 </ol>
-                <p className="mt-3 text-body-sm text-ink-subtle">Times are recorded by Zuryo&apos;s server.</p>
+                <p className="mt-3 text-body-sm text-ink-subtle">Times are recorded by ZuryoFit&apos;s server.</p>
               </CardContent>
             </Card>
           ) : null}

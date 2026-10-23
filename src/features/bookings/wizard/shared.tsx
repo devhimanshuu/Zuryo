@@ -31,7 +31,7 @@ export type Loadable<T> =
 
 const OFFLINE: ServiceError = {
   code: "UNAVAILABLE",
-  message: "We couldn't reach Zuryo. Check your connection and try again.",
+  message: "We couldn't reach ZuryoFit. Check your connection and try again.",
 };
 
 /** Calls a server action and turns a network failure into a structured error instead of a throw. */

@@ -127,12 +127,12 @@ export function LiveSessionStatus({
       >
         {phase === "DUE" ? (
           <>
-            <TimerReset className="size-4" aria-hidden /> The hour is up; Zuryo is closing the session.
+            <TimerReset className="size-4" aria-hidden /> The hour is up; ZuryoFit is closing the session.
           </>
         ) : (
           <>
             <Hourglass className="size-4" aria-hidden /> Wrap-up reminder at {formatTime(wrapUp, tz)}. Times
-            are kept by Zuryo&apos;s server.
+            are kept by ZuryoFit&apos;s server.
           </>
         )}
       </p>

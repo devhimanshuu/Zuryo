@@ -15,7 +15,7 @@ async function expectNoHorizontalOverflow(page: Page) {
 
 test("sign-in and customer screens fit the mobile viewport", async ({ page }) => {
   await page.goto("/sign-in");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Sign in to Zuryo");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Sign in to ZuryoFit");
   await expectNoHorizontalOverflow(page);
 
   await signInAsCustomer(page);

@@ -622,7 +622,7 @@ export async function cancelBooking(
         ? booking.customer.user.name
         : actor.role === "TRAINER"
           ? "Your trainer"
-          : "Zuryo operations";
+          : "ZuryoFit operations";
     const recipients = [booking.customerId, booking.trainerId].filter(
       (id): id is string => !!id && id !== actor.userId,
     );

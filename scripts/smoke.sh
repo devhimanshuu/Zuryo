@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# HTTP smoke test for a deployed Zuryo instance (read-only: signs in as the seeded demo users and GETs pages).
+# HTTP smoke test for a deployed ZuryoFit instance (read-only: signs in as the seeded demo users and GETs pages).
 # Usage: scripts/smoke.sh https://your-app.vercel.app
 B="${1:?usage: smoke.sh <base-url>}"; B="${B%/}"; fail=0
 J=$(mktemp -d)

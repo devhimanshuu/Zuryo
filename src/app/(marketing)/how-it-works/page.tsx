@@ -24,7 +24,7 @@ const JOURNEY = [
   {
     icon: CalendarDays,
     title: "Pick a time and a trainer",
-    body: "Available 60-minute slots are listed with their price. Choose a preferred trainer, or let Zuryo assign one.",
+    body: "Available 60-minute slots are listed with their price. Choose a preferred trainer, or let ZuryoFit assign one.",
   },
   {
     icon: ShieldCheck,
@@ -60,7 +60,7 @@ export default async function HowItWorksPage() {
             From &ldquo;I should work out&rdquo; to a trainer at your door
           </h1>
           <p className="mt-4 text-body-lg text-ink-muted">
-            Every Zuryo session is 60 minutes with a trainer who serves your residential community.
+            Every ZuryoFit session is 60 minutes with a trainer who serves your residential community.
           </p>
         </header>
 

@@ -53,7 +53,7 @@ function Hero() {
             A personal trainer at your building, <em className="text-brand">within the hour.</em>
           </h1>
           <p className="mt-5 max-w-xl text-body-lg text-ink-muted">
-            Zuryo books a qualified trainer for a 60-minute session in your society&apos;s gym, lawn or
+            ZuryoFit books a qualified trainer for a 60-minute session in your society&apos;s gym, lawn or
             terrace. Start now or pick a time this week, see the exact price before you pay, and keep every
             session on record.
           </p>
@@ -172,7 +172,7 @@ const STEPS = [
   {
     icon: UserRoundCheck,
     title: "Get matched to a trainer",
-    body: "Zuryo assigns an available trainer who serves your community, or you can pick a preferred trainer if they're free.",
+    body: "ZuryoFit assigns an available trainer who serves your community, or you can pick a preferred trainer if they're free.",
   },
   {
     icon: ShieldCheck,
@@ -242,7 +242,7 @@ function InstantOrScheduled() {
           </span>
           <h3 className="mt-4 font-display text-display-md">Start within the hour</h3>
           <p className="mt-2 text-ink-muted">
-            Free this evening? Request a session and Zuryo looks for a trainer nearby who can start within 60
+            Free this evening? Request a session and ZuryoFit looks for a trainer nearby who can start within 60
             minutes. If nobody is free, you&apos;ll see the next available times instead of waiting.
           </p>
           <ul className="mt-5 grid gap-2 text-body-md">
@@ -361,7 +361,7 @@ function Benefits() {
         <div>
           <SectionIntro
             id="benefits-heading"
-            eyebrow="Why train with Zuryo"
+            eyebrow="Why train with ZuryoFit"
             title="Personal training that comes to you"
           />
           <ul className="mt-8 grid divide-y divide-hairline border-y border-hairline">

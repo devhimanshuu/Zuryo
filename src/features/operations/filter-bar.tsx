@@ -68,7 +68,7 @@ export function OperationsFilterBar({
   const [viewsOpen, setViewsOpen] = useState(false);
   const [viewName, setViewName] = useState("");
   const [viewError, setViewError] = useState<string | null>(null);
-  const storageKey = `zuryo-ops-views:${pathname}`;
+  const storageKey = `zuryofit-ops-views:${pathname}`;
 
   useEffect(() => {
     setViews(readViews(storageKey));

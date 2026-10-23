@@ -21,7 +21,7 @@ export async function GET() {
     const snapshot = await getLiveSnapshot(defaultDeps(), {
       userId: session.user.id,
       role: session.user.role,
-      name: session.user.name ?? "Zuryo user",
+      name: session.user.name ?? "ZuryoFit user",
     });
     return NextResponse.json(snapshot, { headers: NO_STORE });
   } catch (err) {

@@ -38,7 +38,7 @@ export function PackageCheckoutForm({ packageId, total }: { packageId: string; t
         }
         router.push(`/customer/packages?purchased=${packageId}`);
       } catch {
-        setError("We couldn't reach Zuryo, so we can't confirm the payment. Try again; you won't be charged twice.");
+        setError("We couldn't reach ZuryoFit, so we can't confirm the payment. Try again; you won't be charged twice.");
       }
     });
   }
@@ -66,7 +66,7 @@ export function PackageCheckoutForm({ packageId, total }: { packageId: string; t
                 }
                 router.push("/customer/packages");
               } catch {
-                toast.error("We couldn't reach Zuryo. Check your connection and try again.");
+                toast.error("We couldn't reach ZuryoFit. Check your connection and try again.");
               }
             })
           }

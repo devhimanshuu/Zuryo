@@ -36,7 +36,7 @@ export function MarketingFooter() {
         />
       </div>
       <div className="container-page flex flex-wrap justify-between gap-2 border-t border-ink-inverse/15 py-5 text-body-sm text-ink-inverse/70">
-        <p>© {new Date().getFullYear()} Zuryo. A product demo with synthetic data.</p>
+        <p>© {new Date().getFullYear()} ZuryoFit. A product demo with synthetic data.</p>
         <p>Photography via Unsplash.</p>
       </div>
     </footer>

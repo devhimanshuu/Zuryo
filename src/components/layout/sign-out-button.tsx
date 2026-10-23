@@ -39,7 +39,7 @@ export function SignOutButton() {
             <TriangleAlert className="size-6" aria-hidden />
           </div>
           <div className="min-w-0 flex-1 pt-0.5">
-            <DialogTitle className="text-heading-md font-semibold text-ink">Log out of Zuryo?</DialogTitle>
+            <DialogTitle className="text-heading-md font-semibold text-ink">Log out of ZuryoFit?</DialogTitle>
             <DialogDescription className="mt-1.5 text-body-sm leading-relaxed text-ink-muted">
               Are you sure you want to log out? Any unsaved changes may be lost and you will need to sign back
               in to access your sessions and account.

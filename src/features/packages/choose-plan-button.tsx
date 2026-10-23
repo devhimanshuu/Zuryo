@@ -29,7 +29,7 @@ export function ChoosePlanButton({ planId, planName }: { planId: string; planNam
             }
             router.push(`/customer/packages/checkout/${res.data.packageId}`);
           } catch {
-            toast.error("We couldn't reach Zuryo. Check your connection and try again.");
+            toast.error("We couldn't reach ZuryoFit. Check your connection and try again.");
           }
         })
       }

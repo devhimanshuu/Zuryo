@@ -80,7 +80,7 @@ export type WizardProps = {
 
 const workoutFormSchema = z.object({ workoutCategory: workoutCategorySchema, notes: bookingNotesSchema });
 
-const DRAFT_KEY = "zuryo-booking-draft";
+const DRAFT_KEY = "zuryofit-booking-draft";
 
 type BookingDraft = { mode?: BookingMode | null; category?: WorkoutCategory | null; notes?: string };
 
@@ -763,8 +763,8 @@ export function BookingWizard({ customer, categories, packages, initialMode }: W
                   <h3 className="mb-3 font-semibold">Price</h3>
                   <PriceBreakdown price={match.data.quote} />
                   <p className="mt-3 text-body-sm text-ink-subtle">
-                    Calculated by Zuryo from the current pricing rules and saved with your booking. The
-                    commission goes to your community; the session price goes to Zuryo and your trainer.
+                    Calculated by ZuryoFit from the current pricing rules and saved with your booking. The
+                    commission goes to your community; the session price goes to ZuryoFit and your trainer.
                   </p>
                 </div>
 

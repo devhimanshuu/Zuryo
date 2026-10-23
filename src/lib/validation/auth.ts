@@ -3,7 +3,7 @@ import { WORKOUT_CATEGORIES } from "./enums";
 
 export const PASSWORD_RULES = { min: 8, max: 72 } as const; // bcrypt ignores bytes past 72
 
-/** Roles anyone may register as. Operators are only ever created by Zuryo staff. */
+/** Roles anyone may register as. Operators are only ever created by ZuryoFit staff. */
 export const SIGN_UP_ROLES = ["CUSTOMER", "TRAINER"] as const;
 
 const optionalText = (max: number, message: string) =>

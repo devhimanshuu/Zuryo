@@ -8,7 +8,7 @@ import type { Role } from "@/lib/validation/enums";
 import { cn } from "@/lib/utils/cn";
 import { NAV } from "./nav-config";
 
-const OPEN_EVENT = "zuryo:command-palette";
+const OPEN_EVENT = "zuryofit:command-palette";
 
 type Command = {
   href: string;
@@ -142,7 +142,7 @@ export function CommandPalette({ role }: { role: Role }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="top-[10%] max-w-xl translate-y-0 gap-0 overflow-hidden p-0">
-        <DialogTitle className="sr-only">Search Zuryo</DialogTitle>
+        <DialogTitle className="sr-only">Search ZuryoFit</DialogTitle>
         <DialogDescription className="sr-only">
           Search pages and actions. Use the arrow keys and Enter.
         </DialogDescription>

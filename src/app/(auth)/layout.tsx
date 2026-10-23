@@ -29,7 +29,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </main>
       </div>
 
-      <aside aria-label="About Zuryo" className="sticky top-0 hidden h-dvh p-3 lg:block">
+      <aside aria-label="About ZuryoFit" className="sticky top-0 hidden h-dvh p-3 lg:block">
         <div className="relative isolate flex h-full flex-col justify-between overflow-hidden rounded-lg bg-inverse p-10 text-ink-inverse xl:p-12">
           <FitnessImage image={IMAGES.trainer} sizes="50vw" className="absolute inset-0 -z-20" />
           <div

@@ -1,8 +1,8 @@
 {
-  "name": "zuryo",
+  "name": "zuryofit",
   "version": "0.1.0",
   "private": true,
-  "description": "Zuryo: on-demand personal training for residential communities.",
+  "description": "ZuryoFit: on-demand personal training for residential communities.",
   "engines": {
     "node": ">=20.9"
   },

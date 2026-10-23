@@ -50,7 +50,7 @@ export function buildIcsEvent({
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Zuryo//Booking//EN",
+    "PRODID:-//ZuryoFit//Booking//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",

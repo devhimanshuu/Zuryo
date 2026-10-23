@@ -136,7 +136,7 @@ describe("coach graph routing", () => {
     );
     expect(r).toMatchObject({
       classifiedBy: "heuristic",
-      topic: "MY_ZURYO",
+      topic: "MY_ZURYOFIT",
       route: "ANSWERED",
       source: "RULE_BASED",
       modelId: null,
@@ -213,7 +213,7 @@ describe("coach scope helpers", () => {
   it("classifies by keywords when no model is available", () => {
     expect(heuristicTopic("what should I eat before training")).toBe("NUTRITION");
     expect(heuristicTopic("can I take ibuprofen dosage")).toBe("MEDICAL");
-    expect(heuristicTopic("when is my next session")).toBe("MY_ZURYO");
+    expect(heuristicTopic("when is my next session")).toBe("MY_ZURYOFIT");
     expect(heuristicTopic("write me a python script")).toBe("OUT_OF_SCOPE");
   });
 

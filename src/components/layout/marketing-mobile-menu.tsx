@@ -28,7 +28,7 @@ export function MarketingMobileMenu({ links }: { links: { href: string; label: s
           <Wordmark />
         </div>
         <DialogTitle className="sr-only">Menu</DialogTitle>
-        <DialogDescription className="sr-only">Pages on the Zuryo site</DialogDescription>
+        <DialogDescription className="sr-only">Pages on the ZuryoFit site</DialogDescription>
         <nav aria-label="Main" className="flex-1 px-3 pt-2">
           <ul className="grid gap-0.5">
             {links.map((l) => (

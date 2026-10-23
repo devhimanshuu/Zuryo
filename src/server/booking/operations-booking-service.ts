@@ -123,7 +123,7 @@ export async function reassignBooking(
           bookingId: booking.id,
           type: "BOOKING_RESCHEDULED" as const,
           title: `Booking ${booking.reference} has a new trainer`,
-          message: `${what} on ${when} is now with ${trainerName}.${note ? ` Note from Zuryo: ${note}` : ""}`,
+          message: `${what} on ${when} is now with ${trainerName}.${note ? ` Note from ZuryoFit: ${note}` : ""}`,
         },
         {
           recipientId: trainerId,

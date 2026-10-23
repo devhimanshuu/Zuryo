@@ -20,18 +20,18 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const trainerLine = booking.trainer ? ` with ${booking.trainer.user.name}` : "";
   const location = `${booking.serviceZone.name}${booking.customer.addressLine ? `, ${booking.customer.addressLine}` : ""}`;
   const ics = buildIcsEvent({
-    uid: `${booking.id}@zuryo`,
+    uid: `${booking.id}@zuryofit`,
     title: `${categoryLabel(booking.workoutCategory)}${trainerLine}`,
     start: booking.startAt,
     end: booking.endAt,
-    description: `Zuryo booking ${booking.reference} · 60-minute session · ${formatINR(booking.totalAmount)} (simulated payment)`,
+    description: `ZuryoFit booking ${booking.reference} · 60-minute session · ${formatINR(booking.totalAmount)} (simulated payment)`,
     location,
   });
 
   return new Response(ics, {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
-      "Content-Disposition": `attachment; filename="zuryo-${booking.reference}.ics"`,
+      "Content-Disposition": `attachment; filename="zuryofit-${booking.reference}.ics"`,
       "Cache-Control": "no-store",
     },
   });

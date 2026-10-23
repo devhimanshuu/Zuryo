@@ -9,7 +9,7 @@ import { themeBootstrapScript } from "@/lib/theme";
 
 export const metadata: Metadata = {
   metadataBase: new URL(clientEnv.NEXT_PUBLIC_APP_URL),
-  title: { default: "Zuryo — Personal training in your community", template: "%s · Zuryo" },
+  title: { default: "ZuryoFit — Personal training in your community", template: "%s · ZuryoFit" },
   description:
     "Book a personal trainer for a 60-minute session in your residential community, right now or for later.",
 };

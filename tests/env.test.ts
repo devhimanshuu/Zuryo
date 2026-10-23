@@ -8,7 +8,7 @@ async function parse(env: Record<string, string>) {
   return getServerEnv;
 }
 
-const DB = "postgresql://u:p@host/zuryo?sslmode=require";
+const DB = "postgresql://u:p@host/zuryofit?sslmode=require";
 
 afterEach(() => vi.unstubAllEnvs());
 

@@ -19,5 +19,5 @@ export async function getActor(role: Role): Promise<Actor> {
   if (session.user.role !== role) {
     throw new AppError("FORBIDDEN", "Your account doesn't have access to this workspace.");
   }
-  return { userId: session.user.id, role, name: session.user.name ?? "Zuryo user" };
+  return { userId: session.user.id, role, name: session.user.name ?? "ZuryoFit user" };
 }

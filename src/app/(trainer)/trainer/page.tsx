@@ -43,7 +43,7 @@ export default async function TrainerOverviewPage() {
       />
 
       <OnboardingChecklist
-        storageKey={`zuryo-trainer-onboarding:${actor.userId}`}
+        storageKey={`zuryofit-trainer-onboarding:${actor.userId}`}
         title={`Set up your week, ${actor.name.split(" ")[0]}`}
         description="Open time, meet your first customer and close the loop with notes."
         steps={[

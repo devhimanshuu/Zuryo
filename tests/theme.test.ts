@@ -23,7 +23,7 @@ describe("resolveDark", () => {
 describe("themeBootstrapScript", () => {
   it("reads the shared storage key and handles system preference", () => {
     const script = themeBootstrapScript();
-    expect(script).toContain("zuryo-theme");
+    expect(script).toContain("zuryofit-theme");
     expect(script).toContain("prefers-color-scheme: dark");
     expect(script).toContain("classList.toggle");
   });

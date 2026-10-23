@@ -33,7 +33,7 @@ export function SessionFeedbackForm({ bookingId, current }: { bookingId: string;
       toast.success("Thanks for the feedback", { description: "Your trainer can see it on the session." });
       router.refresh();
     } catch {
-      setServerError("We couldn't reach Zuryo, so nothing was saved. Try again.");
+      setServerError("We couldn't reach ZuryoFit, so nothing was saved. Try again.");
     }
   }
 

@@ -19,7 +19,7 @@ export default async function OperatorSignInPage({
       </p>
       <h1 className="mt-3 font-display text-display-md">Operator sign in</h1>
       <p className="mt-2 text-ink-muted">
-        For Zuryo operations staff: bookings, pricing and oversight. Sign in with your work email and
+        For ZuryoFit operations staff: bookings, pricing and oversight. Sign in with your work email and
         password.
       </p>
       <div className="mt-7 rounded-lg border border-hairline bg-raised p-4 shadow-(--shadow-2) sm:p-7">

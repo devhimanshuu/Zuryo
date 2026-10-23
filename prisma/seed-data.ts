@@ -64,7 +64,7 @@ export const CUSTOMERS: Array<{
   {
     id: "seed_user_priya",
     name: "Priya Sharma",
-    email: "priya.sharma@demo.zuryo.example",
+    email: "priya.sharma@demo.zuryofit.example",
     zoneId: "seed_zone_palm_grove",
     addressLine: "Tower B, 1204",
     age: 32,
@@ -77,7 +77,7 @@ export const CUSTOMERS: Array<{
   {
     id: "seed_user_rahul",
     name: "Rahul Verma",
-    email: "rahul.verma@demo.zuryo.example",
+    email: "rahul.verma@demo.zuryofit.example",
     zoneId: "seed_zone_palm_grove",
     addressLine: "Tower D, 803",
     age: 41,
@@ -90,7 +90,7 @@ export const CUSTOMERS: Array<{
   {
     id: "seed_user_farhan",
     name: "Farhan Qureshi",
-    email: "farhan.qureshi@demo.zuryo.example",
+    email: "farhan.qureshi@demo.zuryofit.example",
     zoneId: "seed_zone_cedar_court",
     addressLine: "Block 2, 401",
     age: 28,
@@ -103,7 +103,7 @@ export const CUSTOMERS: Array<{
   {
     id: "seed_user_ananya",
     name: "Ananya Iyer",
-    email: "ananya.iyer@demo.zuryo.example",
+    email: "ananya.iyer@demo.zuryofit.example",
     zoneId: "seed_zone_lakeview",
     addressLine: "Wing C, 1102",
     age: null,
@@ -124,7 +124,7 @@ export const TRAINERS = [
   {
     id: "seed_user_arjun",
     name: "Arjun Mehta",
-    email: "arjun.mehta@demo.zuryo.example",
+    email: "arjun.mehta@demo.zuryofit.example",
     zoneId: "seed_zone_palm_grove",
     specializations: ["Strength", "Mobility"],
     categories: ["STRENGTH", "MOBILITY"],
@@ -135,7 +135,7 @@ export const TRAINERS = [
   {
     id: "seed_user_kavya",
     name: "Kavya Rao",
-    email: "kavya.rao@demo.zuryo.example",
+    email: "kavya.rao@demo.zuryofit.example",
     zoneId: "seed_zone_palm_grove",
     specializations: ["HIIT", "Weight loss"],
     categories: ["CARDIO", "FUNCTIONAL"],
@@ -146,7 +146,7 @@ export const TRAINERS = [
   {
     id: "seed_user_rohan",
     name: "Rohan Das",
-    email: "rohan.das@demo.zuryo.example",
+    email: "rohan.das@demo.zuryofit.example",
     zoneId: "seed_zone_lakeview",
     specializations: ["Yoga", "Posture"],
     categories: ["YOGA", "MOBILITY"],
@@ -157,7 +157,7 @@ export const TRAINERS = [
   {
     id: "seed_user_meera",
     name: "Meera Pillai",
-    email: "meera.pillai@demo.zuryo.example",
+    email: "meera.pillai@demo.zuryofit.example",
     zoneId: "seed_zone_cedar_court",
     specializations: ["Endurance", "Functional training"],
     categories: ["CARDIO", "FUNCTIONAL"],
@@ -169,7 +169,7 @@ export const TRAINERS = [
   {
     id: "seed_user_sana",
     name: "Sana Kulkarni",
-    email: "sana.kulkarni@demo.zuryo.example",
+    email: "sana.kulkarni@demo.zuryofit.example",
     zoneId: "seed_zone_palm_grove",
     specializations: ["Yoga", "Mobility"],
     categories: ["YOGA", "MOBILITY"],
@@ -193,7 +193,7 @@ export const FULL_DAY_TRAINERS = ["seed_user_arjun"] as const;
 export const OPERATIONS_USER = {
   id: "seed_user_neha",
   name: "Neha Kapoor",
-  email: "neha.kapoor@demo.zuryo.example",
+  email: "neha.kapoor@demo.zuryofit.example",
 } as const;
 
 export const PEAK_WINDOWS: Array<PeakWindowLike & { id: string; label: string }> = [

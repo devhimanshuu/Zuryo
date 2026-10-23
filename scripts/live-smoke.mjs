@@ -1,4 +1,4 @@
-// Browser smoke test against a DEPLOYED Zuryo. Writes one synthetic booking (then cancels it) using the
+// Browser smoke test against a DEPLOYED ZuryoFit. Writes one synthetic booking (then cancels it) using the
 // seeded demo accounts, so only run it against a demo database.
 //   node scripts/live-smoke.mjs https://your-app.vercel.app
 import { chromium } from "@playwright/test";
@@ -32,7 +32,7 @@ let bookingUrl = null;
 let customer = null;
 try {
   customer = await newPage();
-  await step("customer signs in", () => signIn(customer, "priya.sharma@demo.zuryo.example", "Customer"));
+  await step("customer signs in", () => signIn(customer, "priya.sharma@demo.zuryofit.example", "Customer"));
   await step("scheduled booking: category, tomorrow, standard slot, review, confirm", async () => {
     await customer.goto("/customer/bookings/new");
     await customer.waitForLoadState("networkidle");
@@ -79,7 +79,7 @@ try {
   });
   const ops = await newPage();
   await step("operations signs in and sees the pricing configuration", async () => {
-    await signIn(ops, "neha.kapoor@demo.zuryo.example", "Operations");
+    await signIn(ops, "neha.kapoor@demo.zuryofit.example", "Operations");
     await ops.goto("/operations/pricing");
     await ops.waitForLoadState("networkidle");
     const values = (await ops.locator("input").evaluateAll((els) => els.map((e) => e.value))).join(" ");
@@ -88,7 +88,7 @@ try {
   });
   const trainer = await newPage();
   await step("trainer signs in and opens sessions", async () => {
-    await signIn(trainer, "arjun.mehta@demo.zuryo.example", "Trainer");
+    await signIn(trainer, "arjun.mehta@demo.zuryofit.example", "Trainer");
     await trainer.goto("/trainer/sessions");
     await trainer.getByRole("heading").first().waitFor();
   });

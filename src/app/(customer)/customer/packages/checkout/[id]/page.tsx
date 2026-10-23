@@ -67,7 +67,7 @@ export default async function PackageCheckoutPage({ params }: { params: Promise<
             </dd>
           </dl>
           <p className="text-body-sm text-ink-subtle">
-            The commission goes to your community; the package price goes to Zuryo and its trainers.
+            The commission goes to your community; the package price goes to ZuryoFit and its trainers.
           </p>
         </CardContent>
       </Card>

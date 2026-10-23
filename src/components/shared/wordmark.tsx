@@ -19,9 +19,9 @@ export function Wordmark({
         inverse ? "text-ink-inverse" : "text-ink",
         className,
       )}
-      aria-label="Zuryo home"
+      aria-label="ZuryoFit home"
     >
-      Zuryo
+      ZuryoFit
     </Link>
   );
 }

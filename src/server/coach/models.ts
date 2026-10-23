@@ -84,7 +84,7 @@ export function coachModelsFromEnv(env: CoachModelEnv): CoachModels {
         ...opts,
         configuration: {
           baseURL: OPENROUTER_BASE_URL,
-          defaultHeaders: { "X-Title": "Zuryo", ...(env.APP_URL ? { "HTTP-Referer": env.APP_URL } : {}) },
+          defaultHeaders: { "X-Title": "ZuryoFit", ...(env.APP_URL ? { "HTTP-Referer": env.APP_URL } : {}) },
         },
       });
     // Classifying is a one-word job: the first two free models are plenty.

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * Zuryo design tokens — mirrors the Zuryo design system (tokens.json).
+ * ZuryoFit design tokens — mirrors the ZuryoFit design system (tokens.json).
  * Colours are CSS variables so a future dark theme only redefines :root values.
  */
 :root {

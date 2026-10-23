@@ -22,7 +22,7 @@ export default async function SignInPage({
         <span className="h-px w-6 bg-brand" aria-hidden />
         Welcome back
       </p>
-      <h1 className="mt-3 font-display text-display-md">Sign in to Zuryo</h1>
+      <h1 className="mt-3 font-display text-display-md">Sign in to ZuryoFit</h1>
       <p className="mt-2 text-ink-muted">
         Choose customer or trainer, then sign in with your email and password.
       </p>
@@ -40,7 +40,7 @@ export default async function SignInPage({
         Each workspace checks your role on the server before it opens.
       </p>
       <p className="mt-4 text-body-sm text-ink-muted">
-        New to Zuryo?{" "}
+        New to ZuryoFit?{" "}
         <Link href="/sign-up" className="font-semibold text-brand hover:underline">
           Create an account
         </Link>

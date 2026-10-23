@@ -1,4 +1,4 @@
-// Zuryo data model. See docs/ARCHITECTURE.md for the reasoning behind each choice.
+// ZuryoFit data model. See docs/ARCHITECTURE.md for the reasoning behind each choice.
 // Conventions:
 //   - Money is Decimal(10, 2) in INR rupees. Never Float.
 //   - Percentages are Decimal(5, 2) (10.00 = 10%).

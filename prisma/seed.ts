@@ -377,7 +377,7 @@ async function main() {
     sessions: await db.sessionRecord.count(),
     notifications: await db.notification.count(),
   };
-  console.log("Seeded Zuryo demo data:", counts);
+  console.log("Seeded ZuryoFit demo data:", counts);
   console.log(`Demo sign-in: any seeded email with password "${DEMO_PASSWORD}".`);
 }
 

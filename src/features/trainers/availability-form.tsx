@@ -51,7 +51,7 @@ export function AvailabilityForm({ days }: { days: { key: string; label: string 
     try {
       res = await addAvailabilityAction(values);
     } catch {
-      setServerError("We couldn't reach Zuryo. Check your connection and try again.");
+      setServerError("We couldn't reach ZuryoFit. Check your connection and try again.");
       return;
     }
     if (!res.ok) {

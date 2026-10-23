@@ -4,7 +4,7 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { createContext, useContext, useEffect, useState } from "react";
 import { cn } from "@/lib/utils/cn";
 
-const STORAGE_KEY = "zuryo:sidebar-collapsed";
+const STORAGE_KEY = "zuryofit:sidebar-collapsed";
 
 const SidebarContext = createContext<{ collapsed: boolean; toggle: () => void }>({
   collapsed: false,

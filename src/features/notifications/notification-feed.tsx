@@ -230,7 +230,7 @@ export function NotificationFeed({
         toast.success(res.data.marked > 0 ? "All updates marked as read" : "You're already all caught up");
         router.refresh();
       } catch {
-        toast.error("We couldn't reach Zuryo. Check your connection and try again.");
+        toast.error("We couldn't reach ZuryoFit. Check your connection and try again.");
       }
     });
   }
@@ -248,7 +248,7 @@ export function NotificationFeed({
         }
         router.refresh();
       } catch {
-        toast.error("We couldn't reach Zuryo. Check your connection and try again.");
+        toast.error("We couldn't reach ZuryoFit. Check your connection and try again.");
       }
     });
   }

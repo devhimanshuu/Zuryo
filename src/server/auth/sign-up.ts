@@ -89,7 +89,7 @@ export async function completeGoogleSignUp(
     });
   }
   const common = {
-    name: identity.name.trim().slice(0, 80) || "Zuryo member",
+    name: identity.name.trim().slice(0, 80) || "ZuryoFit member",
     email: identity.email.toLowerCase(),
     phone: data.phone,
   };

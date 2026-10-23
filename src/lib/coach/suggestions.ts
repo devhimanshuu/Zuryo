@@ -1,6 +1,6 @@
 import type { CoachContext } from "./context";
 
-export type SuggestionCategory = "ALL" | "WARMUP" | "RECOVERY" | "NUTRITION" | "HABITS" | "MY_ZURYO";
+export type SuggestionCategory = "ALL" | "WARMUP" | "RECOVERY" | "NUTRITION" | "HABITS" | "MY_ZURYOFIT";
 
 export type SmartSuggestion = {
   id: string;
@@ -15,7 +15,7 @@ export const SUGGESTION_CATEGORIES: Array<{ key: SuggestionCategory; label: stri
   { key: "RECOVERY", label: "Recovery" },
   { key: "NUTRITION", label: "Nutrition" },
   { key: "HABITS", label: "Habits" },
-  { key: "MY_ZURYO", label: "My Zuryo" },
+  { key: "MY_ZURYOFIT", label: "My ZuryoFit" },
 ];
 
 /**
@@ -53,7 +53,7 @@ export function generateSmartSuggestions(ctx: CoachContext | null): SmartSuggest
       if (recent.trainerSuggestion) {
         list.push({
           id: "trainer-suggestion",
-          category: "MY_ZURYO",
+          category: "MY_ZURYOFIT",
           text: `Tell me more about the trainer's tip: "${recent.trainerSuggestion}"`,
           badge: "Trainer note",
         });
@@ -64,7 +64,7 @@ export function generateSmartSuggestions(ctx: CoachContext | null): SmartSuggest
   if (ctx?.pkg) {
     list.push({
       id: "package-balance",
-      category: "MY_ZURYO",
+      category: "MY_ZURYOFIT",
       text: `How many sessions are left in my ${ctx.pkg.name}?`,
       badge: "Package",
     });
@@ -113,7 +113,7 @@ export function generateSmartSuggestions(ctx: CoachContext | null): SmartSuggest
     },
     {
       id: "std-consistency",
-      category: "MY_ZURYO",
+      category: "MY_ZURYOFIT",
       text: "Can you review my fitness profile and suggest my next step?",
     },
   ];

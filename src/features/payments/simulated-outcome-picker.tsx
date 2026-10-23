@@ -23,7 +23,7 @@ export function SimulatedOutcomePicker({
         <FlaskConical className="size-4 text-accent-text" aria-hidden /> Demo checkout — no real money is charged
       </legend>
       <p className="text-body-sm text-ink-muted">
-        Zuryo doesn&apos;t collect card or bank details in this demo. Choose what the simulated payment provider
+        ZuryoFit doesn&apos;t collect card or bank details in this demo. Choose what the simulated payment provider
         should answer.
       </p>
       <div className="grid gap-2 sm:grid-cols-2">

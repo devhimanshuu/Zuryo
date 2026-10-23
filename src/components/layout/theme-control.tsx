@@ -11,7 +11,7 @@ const OPTIONS = [
   { value: "dark", label: "Dark theme", Icon: Moon },
 ] as const;
 
-const CHANGE_EVENT = "zuryo-theme-change";
+const CHANGE_EVENT = "zuryofit-theme-change";
 
 function storedChoice(): ThemeChoice {
   try {

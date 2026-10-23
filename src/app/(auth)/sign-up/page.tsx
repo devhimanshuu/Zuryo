@@ -24,7 +24,7 @@ export default async function SignUpPage() {
     <div className="w-full max-w-[440px] animate-rise">
       <p className="flex items-center gap-3 text-eyebrow font-semibold tracking-[0.08em] text-brand uppercase">
         <span className="h-px w-6 bg-brand" aria-hidden />
-        Join Zuryo
+        Join ZuryoFit
       </p>
       <h1 className="mt-3 font-display text-display-md">Create your account</h1>
       <p className="mt-2 text-ink-muted">Choose customer or trainer, then tell us a little about you.</p>
@@ -34,7 +34,7 @@ export default async function SignUpPage() {
       </div>
       <p className="mt-5 flex items-center gap-2 text-body-sm text-ink-subtle">
         <ShieldCheck className="size-4 shrink-0" aria-hidden />
-        Operations accounts are created by Zuryo and can&apos;t be registered here.
+        Operations accounts are created by ZuryoFit and can&apos;t be registered here.
       </p>
       <p className="mt-4 border-t border-hairline pt-4 text-body-sm text-ink-muted">
         Already have an account?{" "}

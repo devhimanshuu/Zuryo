@@ -33,7 +33,7 @@ export default async function CompleteGoogleSignUpPage() {
       </p>
       <h1 className="mt-3 font-display text-display-md">Finish creating your account</h1>
       <p className="mt-2 text-ink-muted">
-        Your Google account is verified. Tell us how you&apos;ll use Zuryo.
+        Your Google account is verified. Tell us how you&apos;ll use ZuryoFit.
       </p>
       <div className="mt-7 rounded-lg border border-hairline bg-raised p-4 shadow-(--shadow-2) sm:p-7">
         <SignUpForm zones={zones.data} google={{ name: user.name ?? "", email: user.email }} />

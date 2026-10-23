@@ -80,7 +80,7 @@ export function SessionSummaryForm({
       toast.success("Session summary saved", { description: "The customer sees it in their fitness history." });
       router.refresh();
     } catch {
-      setServerError("We couldn't reach Zuryo, so nothing was saved. Try again.");
+      setServerError("We couldn't reach ZuryoFit, so nothing was saved. Try again.");
     }
   }
 

@@ -93,8 +93,8 @@ export default async function CustomerHomePage() {
       </header>
 
       <OnboardingChecklist
-        storageKey={`zuryo-onboarding:${actor.userId}`}
-        title={bookingCount === 0 ? `Welcome to Zuryo, ${firstName}` : "A few things left to set up"}
+        storageKey={`zuryofit-onboarding:${actor.userId}`}
+        title={bookingCount === 0 ? `Welcome to ZuryoFit, ${firstName}` : "A few things left to set up"}
         description="Four small steps so every session fits you from the start."
         steps={[
           {
@@ -240,7 +240,7 @@ export default async function CustomerHomePage() {
             icon={Zap}
             tone="accent"
             title="Train within the hour"
-            body="Zuryo finds a trainer nearby who can start in the next 60 minutes."
+            body="ZuryoFit finds a trainer nearby who can start in the next 60 minutes."
           />
           <QuickAction
             href="/customer/bookings/new?mode=scheduled"

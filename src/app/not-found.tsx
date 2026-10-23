@@ -28,7 +28,7 @@ export default function NotFound() {
         </p>
         <Button asChild variant="primary" size="lg" className="mt-8">
           <Link href="/">
-            <ArrowLeft aria-hidden /> Back to Zuryo
+            <ArrowLeft aria-hidden /> Back to ZuryoFit
           </Link>
         </Button>
       </div>
