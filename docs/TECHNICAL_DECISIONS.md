@@ -1,4 +1,4 @@
-# Zuryo — Technical Decisions, Cost and Future Work
+# ZuryoFit — Technical Decisions, Cost and Future Work
 
 Companion to [ARCHITECTURE.md](ARCHITECTURE.md). "Implemented" means it exists in this repository;
 "proposed" means it does not.
@@ -33,6 +33,10 @@ The seams (services in `src/server`, pure rules in `src/lib`) are where it would
 - **Payments.** Simulated only, unique `idempotencyKey`, one successful payment per booking/package.
 
 ## 3. Notifications, GPS and live ETA — proposed designs
+
+Implemented today: simulated locations (seeded trainer bases and community coordinates), distance in
+matching and instant reach, and a simulated arrival estimate for customers (ARCHITECTURE §D). What
+follows is the production version.
 
 Not implemented: in-app notification rows only.
 
@@ -117,13 +121,13 @@ per-minute scheduler (see below); an admin UI for creating trainers/zones.
 - **API:** reuse `generateRecommendationAction` with a `selfGuided` flag and a daily cache key.
 - **Edge cases:** cost (cache one per customer per day), injuries/limitations (already passed to the prompt), repeating the last trainer plan.
 
-### F. Nutrition recommendation chatbot (proposed)
+### F. Nutrition chatbot (implemented as the scoped fitness coach)
 
-- **UX:** a scoped chat (general nutrition, not medical advice) with a disclaimer and refusal of diagnosis.
-- **Data:** `ChatThread`, `ChatMessage(role, content, tokens)`; store minimal profile context only.
-- **API:** `POST /api/v1/chat` streaming responses with a per-customer rate limit.
-- **Dependencies:** the existing provider abstraction; moderation/scope prompt; cost caps.
-- **Edge cases:** medical or eating-disorder topics (escalate to a safe response), prompt injection, token cost growth over long threads (summarise).
+- **UX:** a floating coach panel on every customer screen (draggable launcher whose position is remembered, scope/safety copy, suggestion prompts, clear-history control) instead of a dedicated page. General nutrition is one allowed topic; medical and diet-for-condition questions are declined.
+- **Data:** `ChatMessage(role, content, route, source, modelId, createdAt)`, one thread per customer; no separate thread table. The last 8 messages are prompt history and 40 are shown. `AiRequestLog.feature = COACH` keeps usage separate.
+- **API:** server actions `loadCoachThreadAction` (first open), `askCoachAction` / `clearCoachHistoryAction` (no streaming yet); 6 questions/minute and 60/day per customer, message max 500 chars.
+- **Dependencies:** LangChain (`@langchain/langgraph`, `@langchain/groq`, `@langchain/openai`) for the guard → classify → retrieve → answer → fallback graph; Groq and OpenRouter free tiers; a keyword classifier and rule-based replies when no model answers.
+- **Edge cases:** medical or eating-disorder topics (fixed refusal or safety reply), prompt injection (customer data and history are labelled as data, never instructions), token growth (bounded history), provider failure (next model, then rule-based).
 
 ### G. Progress tracking from historical assessments (partly implemented: per-goal tracking and session history exist)
 
@@ -183,3 +187,13 @@ sync, and the operations "Reconcile" button, always with the correct persisted t
 attach one: call `GET https://<app>/api/cron/session-lifecycle` every minute with
 `Authorization: Bearer $CRON_SECRET` from any scheduler (or Vercel Pro cron, after confirming the
 frequency limit in current Vercel docs).
+
+## Removed: AI workout recommendations (2026-10-23)
+
+The "generate a workout" feature was removed on request: the Workouts tab, generate and feedback
+actions, the provider layer (`src/lib/ai/provider.ts`), the deterministic templates, the operations
+usage card and the related tests/scripts (`ai:smoke`). The fitness coach keeps its own Groq and
+OpenRouter (free models only) router in `src/server/coach/models.ts`. The `WorkoutRecommendation`
+table and its migrations are intentionally left in place (no data migration was run); drop it with a
+new migration if the feature will not return. Older sections of these docs that describe
+recommendations are historical.

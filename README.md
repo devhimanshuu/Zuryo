@@ -1,4 +1,4 @@
-# Zuryo
+# ZuryoFit
 
 On-demand personal training for residential communities. Customers book a 60-minute session with a
 trainer in their community, **instantly** (starting within the hour) or **scheduled** for later.
@@ -11,30 +11,41 @@ pricing. Payments and all data are **simulated/synthetic**.
 
 - **Customer:** fitness assessment (age, weight, goals, level, preferences) → booking wizard
   (instant/scheduled, workout type, slot, optional preferred trainer, price breakdown) → confirmation,
-  cancel/reschedule → packages with simulated checkout → session history, feedback and AI/rule-based
-  workout recommendations.
-- **Trainer:** schedule, availability windows, session console with a server-backed 60-minute timer
-  and 55-minute warning, session summary (activities, notes, suggested next workout).
-- **Operations:** dashboard from persisted data, all bookings, trainer roster, pricing/peak-window
-  editor, overdue-session reconciliation.
+  cancel/reschedule → packages with simulated checkout → paged session history, feedback and
+  a fitness progress dashboard → a scoped fitness-support coach that floats over every
+  customer screen (drag it anywhere), answering training, recovery and general nutrition questions
+  using the customer's own profile and session history.
+- **Trainer:** schedule, availability windows, paged session history, session console with a
+  server-backed 60-minute timer and 55-minute warning, session summary (activities, notes, suggested
+  next workout).
+- **Operations:** dashboard from persisted data, paged bookings and trainer roster, pricing/peak-window
+  editor with paged version history, overdue-session reconciliation.
 
 Pricing: standard ₹399, peak ₹499, plus a 10% society commission added at checkout
 (₹399 → ₹438.90; ₹499 → ₹548.90). The server computes the payable amount.
 
 ## Feature status
 
-**Implemented and verified** (unit + live-database integration tests, browser E2E, and a live
-smoke run; details in [docs/TESTING.md](docs/TESTING.md)): instant/scheduled booking, availability,
+**Implemented and verified** (unit + live-database integration tests, browser E2E, and live smoke
+runs against the real Groq free tier; details in [docs/TESTING.md](docs/TESTING.md)):
+instant/scheduled booking, availability,
 automatic trainer assignment by seeded service zone, preferred trainer, double-booking protection,
 no-trainer handling, server-side pricing and commission, simulated checkout, packages and ledger
 (single deduction, restore on cancel), cancel and reschedule with notifications, session
 start/timer/55-minute warning/60-minute completion (idempotent), fitness profile and session
-records, role-based access, AI recommendation with labelled rule-based fallback.
+records, role-based access, the scoped fitness
+coach (graph, context loading, question limits, stored thread, rule-based fallback), and
+URL-addressable server-side pagination with exact totals and tab counts on bookings, sessions,
+notifications, packages, trainer rosters and pricing history.
+Polished workspace UI: per-route loading skeletons, a next-session countdown and momentum card,
+12-week activity charts and streaks, calendar export and copyable references, 14-day operations
+trends, searchable/sortable operations lists, grouped notifications with optimistic mark-all, and a
+persisted light/dark theme.
 
-**Implemented but not fully verified:** live LLM output (worked on 2026-10-20; HTTP 429 free-tier
-rate limit on 2026-10-21, so the fallback was what ran); Anthropic provider path (unit-tested
-against recorded shapes, never called live); automatic scheduled processing (the cron endpoint
-exists and is verified to reject bad tokens, but no scheduler is attached).
+**Implemented but not fully verified:** automatic scheduled processing (the cron endpoint exists and is verified
+to reject bad tokens, but no scheduler is attached); the OpenRouter leg of the provider chain (the
+2026-10-22 live runs were served by Groq; the earlier 2026-10-21 run returned HTTP 429 on the free
+tier and the labelled fallback is what ran).
 
 **Partially implemented:** location (seeded service zones with synthetic coordinates, not GPS or
 distance); notifications (in-app only).
@@ -46,7 +57,8 @@ pricing, React Native client. See [docs/TECHNICAL_DECISIONS.md](docs/TECHNICAL_D
 
 Next.js 15 (App Router) · React 19 · TypeScript (strict) · Tailwind CSS 4 + Radix primitives ·
 React Hook Form + Zod 4 · NextAuth v5 (credentials, JWT) · PostgreSQL on Neon · Prisma 6 (Rust-free
-client + `@prisma/adapter-pg`) · OpenRouter / Anthropic for AI · Vitest · Playwright · Vercel.
+client + `@prisma/adapter-pg`) · Groq / OpenRouter (free models) for the coach · LangChain + LangGraph for the
+coach · Vitest · Playwright · Vercel.
 
 ```
 Browser ──▶ middleware (JWT + role) ──▶ Server Components / Server Actions ──▶ services ──▶ PostgreSQL
@@ -90,7 +102,7 @@ npm run dev                 # http://localhost:3000
 | `npm run test:integration`           | DB integration tests; needs `TEST_DATABASE_URL` (disposable DB — it is truncated)                        |
 | `npm run test:e2e`                   | Playwright journeys against a production build and the test DB (`npx playwright install chromium` first) |
 | `npm run build`                      | `prisma generate && next build`                                                                          |
-| `npm run ai:smoke`                   | One live AI provider call with synthetic data (prints latency and tokens)                                |
+| `npm run coach:smoke`                | One live coach question through the real provider chain (prints the route it took)                       |
 | `bash scripts/smoke.sh <url>`        | HTTP smoke test (sign-in, pages, role isolation) against a deployment                                    |
 | `node scripts/live-smoke.mjs <url>`  | Browser smoke: book, check price, cancel against a deployment (demo DB only)                             |
 
@@ -98,16 +110,17 @@ npm run dev                 # http://localhost:3000
 
 Everything is documented in [.env.example](.env.example). Summary:
 
-| Variable                                  | Scope  | Required           | Purpose                                                                 |
-| ----------------------------------------- | ------ | ------------------ | ----------------------------------------------------------------------- |
-| `DATABASE_URL`                            | server | yes                | Pooled Postgres URL (runtime)                                           |
-| `DIRECT_URL`                              | server | yes for migrations | Direct Postgres URL (Prisma Migrate)                                    |
-| `AUTH_SECRET`                             | server | yes                | Signs session JWTs; use a different value per environment               |
-| `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` | server | no                 | AI via OpenRouter; unset → rule-based fallback                          |
-| `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL`   | server | no                 | Alternative AI provider                                                 |
-| `CRON_SECRET`                             | server | no                 | Bearer token for `/api/cron/session-lifecycle` (≥16 chars; unset → 503) |
-| `NEXT_PUBLIC_APP_URL`                     | public | no                 | Canonical URL                                                           |
-| `TEST_DATABASE_URL`, `TEST_DIRECT_URL`    | server | tests only         | Disposable test database                                                |
+| Variable                                          | Scope  | Required           | Purpose                                                                 |
+| ------------------------------------------------- | ------ | ------------------ | ----------------------------------------------------------------------- |
+| `DATABASE_URL`                                    | server | yes                | Pooled Postgres URL (runtime)                                           |
+| `DIRECT_URL`                                      | server | yes for migrations | Direct Postgres URL (Prisma Migrate)                                    |
+| `AUTH_SECRET`                                     | server | yes                | Signs session JWTs; use a different value per environment               |
+| `AI_PROVIDER`                                     | server | no                 | `auto` (default failover chain), `groq` or `openrouter`                 |
+| `GROQ_API_KEY` / `GROQ_MODEL` / `GROQ_FAST_MODEL` | server | no                 | AI via Groq's free tier, tried first; unset → the next provider         |
+| `OPENROUTER_API_KEY` / `OPENROUTER_MODEL`         | server | no                 | AI via OpenRouter's free tier, tried next; unset → rule-based fallback  |
+| `CRON_SECRET`                                     | server | no                 | Bearer token for `/api/cron/session-lifecycle` (≥16 chars; unset → 503) |
+| `NEXT_PUBLIC_APP_URL`                             | public | no                 | Canonical URL                                                           |
+| `TEST_DATABASE_URL`, `TEST_DIRECT_URL`            | server | tests only         | Disposable test database                                                |
 
 Server variables are validated by `src/lib/config/env.server.ts` (imports `server-only`); a missing
 or malformed value produces a named error in the server log. Never commit `.env`.
@@ -119,9 +132,11 @@ Deployed at https://zuryo-one.vercel.app (Vercel project `zuryo`). To reproduce:
 ```bash
 vercel link --project zuryo
 # add DATABASE_URL, DIRECT_URL, AUTH_SECRET, CRON_SECRET, NEXT_PUBLIC_APP_URL (and optionally
-# OPENROUTER_API_KEY) with `vercel env add <NAME> production`
+# GROQ_API_KEY or OPENROUTER_API_KEY) with `vercel env add <NAME> production`
 DATABASE_URL=… DIRECT_URL=… npx prisma migrate deploy   # safe: applies pending migrations only
 npm run db:seed                                          # demo database only
+# A demo database seeded before trainer locations existed: set them without re-seeding
+npx tsx prisma/backfill-trainer-locations.ts
 vercel deploy --prod
 bash scripts/smoke.sh https://<your-app>.vercel.app
 ```

@@ -1,12 +1,6 @@
 name: Session lifecycle
 
 # Calls /api/cron/session-lifecycle so 55-minute warnings and 60-minute completions are recorded
-# even when nobody has Zuryo open. GitHub runs schedules at most every 5 minutes and may start them
-# late; the route is idempotent and always records completion at the persisted deadline, so a late
-# or doubled run never changes the outcome.
-#
-# Setup: add the repository secret CRON_SECRET (same value as the Vercel production env var).
-# Optional repository variable APP_URL overrides the deployment URL.
 
 on:
   schedule:
